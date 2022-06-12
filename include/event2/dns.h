@@ -375,7 +375,7 @@ int evdns_base_nameserver_ip_add(struct evdns_base *base,
 EVENT2_EXPORT_SYMBOL
 int
 evdns_base_nameserver_sockaddr_add(struct evdns_base *base,
-    const struct sockaddr *sa, ev_socklen_t len, unsigned flags);
+    const struct sockaddr *sa, socklen_t len, unsigned flags);
 
 struct evdns_request;
 
@@ -511,22 +511,6 @@ int evdns_base_resolv_conf_parse(struct evdns_base *base, int flags, const char 
 EVENT2_EXPORT_SYMBOL
 int evdns_base_load_hosts(struct evdns_base *base, const char *hosts_fname);
 
-#if defined(EVENT_IN_DOXYGEN_) || defined(_WIN32)
-/**
-  Obtain nameserver information using the Windows API.
-
-  Attempt to configure a set of nameservers based on platform settings on
-  a win32 host.  Preferentially tries to use GetNetworkParams; if that fails,
-  looks in the registry.
-
-  @return 0 if successful, or -1 if an error occurred
-  @see evdns_resolv_conf_parse()
- */
-EVENT2_EXPORT_SYMBOL
-int evdns_base_config_windows_nameservers(struct evdns_base *);
-#define EVDNS_BASE_CONFIG_WINDOWS_NAMESERVERS_IMPLEMENTED
-#endif
-
 
 /**
   Clear the list of search domains.
@@ -585,7 +569,7 @@ void evdns_set_log_fn(evdns_debug_log_fn_type fn);
    since Libevent now provides its own secure RNG.
  */
 EVENT2_EXPORT_SYMBOL
-void evdns_set_transaction_id_fn(ev_uint16_t (*fn)(void));
+void evdns_set_transaction_id_fn(uint16_t (*fn)(void));
 
 /**
    Set a callback used to generate random bytes.  By default, we use
@@ -652,7 +636,7 @@ typedef void (*evdns_request_callback_fn_type)(struct evdns_server_request *, vo
       an error occurred.
  */
 EVENT2_EXPORT_SYMBOL
-struct evdns_server_port *evdns_add_server_port_with_base(struct event_base *base, evutil_socket_t socket, int flags, evdns_request_callback_fn_type callback, void *user_data);
+struct evdns_server_port *evdns_add_server_port_with_base(struct event_base *base, int socket, int flags, evdns_request_callback_fn_type callback, void *user_data);
 /** Close down a DNS server port, and free associated structures. */
 EVENT2_EXPORT_SYMBOL
 void evdns_close_server_port(struct evdns_server_port *port);
@@ -694,7 +678,7 @@ EVENT2_EXPORT_SYMBOL
 int evdns_server_request_get_requesting_addr(struct evdns_server_request *req, struct sockaddr *sa, int addr_len);
 
 /** Callback for evdns_getaddrinfo. */
-typedef void (*evdns_getaddrinfo_cb)(int result, struct evutil_addrinfo *res, void *arg);
+typedef void (*evdns_getaddrinfo_cb)(int result, struct addrinfo *res, void *arg);
 
 struct evdns_base;
 struct evdns_getaddrinfo_request;
@@ -706,7 +690,7 @@ struct evdns_getaddrinfo_request;
  *
  * When the callback is invoked, we pass as its first argument the error code
  * that getaddrinfo would return (or 0 for no error).  As its second argument,
- * we pass the evutil_addrinfo structures we found (or NULL on error).  We
+ * we pass the addrinfo structures we found (or NULL on error).  We
  * pass 'arg' as the third argument.
  *
  * Limitations:
@@ -719,7 +703,7 @@ EVENT2_EXPORT_SYMBOL
 struct evdns_getaddrinfo_request *evdns_getaddrinfo(
     struct evdns_base *dns_base,
     const char *nodename, const char *servname,
-    const struct evutil_addrinfo *hints_in,
+    const struct addrinfo *hints_in,
     evdns_getaddrinfo_cb cb, void *arg);
 
 /* Cancel an in-progress evdns_getaddrinfo.  This MUST NOT be called after the
@@ -742,7 +726,7 @@ void evdns_getaddrinfo_cancel(struct evdns_getaddrinfo_request *req);
  */
 EVENT2_EXPORT_SYMBOL
 int evdns_base_get_nameserver_addr(struct evdns_base *base, int idx,
-    struct sockaddr *sa, ev_socklen_t len);
+    struct sockaddr *sa, socklen_t len);
 
 #ifdef __cplusplus
 }

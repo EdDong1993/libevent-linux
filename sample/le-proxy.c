@@ -16,13 +16,8 @@
 #include <string.h>
 #include <errno.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
-#endif
 
 #include <event2/bufferevent_ssl.h>
 #include <event2/bufferevent.h>
@@ -156,7 +151,7 @@ syntax(void)
 }
 
 static void
-accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
+accept_cb(struct evconnlistener *listener, int fd,
     struct sockaddr *a, int slen, void *p)
 {
 	struct bufferevent *b_out, *b_in;
@@ -215,13 +210,6 @@ main(int argc, char **argv)
 
 	int use_ssl = 0;
 	struct evconnlistener *listener;
-
-#ifdef _WIN32
-	WORD wVersionRequested;
-	WSADATA wsaData;
-	wVersionRequested = MAKEWORD(2, 2);
-	(void) WSAStartup(wVersionRequested, &wsaData);
-#endif
 
 	if (argc < 3)
 		syntax();
@@ -296,10 +284,6 @@ main(int argc, char **argv)
 
 	evconnlistener_free(listener);
 	event_base_free(base);
-
-#ifdef _WIN32
-	WSACleanup();
-#endif
 
 	return 0;
 }

@@ -28,10 +28,6 @@
 
 #include <sys/types.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
-
 #include "event2/util.h"
 #include "event2/buffer.h"
 #include "event2/bufferevent.h"
@@ -354,7 +350,7 @@ bufferevent_pair_get_partner(struct bufferevent *bev)
 
 const struct bufferevent_ops bufferevent_ops_pair = {
 	"pair_elt",
-	evutil_offsetof(struct bufferevent_pair, bev.bev),
+	offsetof(struct bufferevent_pair, bev.bev),
 	be_pair_enable,
 	be_pair_disable,
 	be_pair_unlink,

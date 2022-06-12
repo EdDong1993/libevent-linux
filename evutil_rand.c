@@ -40,96 +40,11 @@
 #include "util-internal.h"
 #include "evthread-internal.h"
 
-#ifdef EVENT__HAVE_ARC4RANDOM
-#include <stdlib.h>
-#include <string.h>
-int
-evutil_secure_rng_set_urandom_device_file(char *fname)
-{
-	(void) fname;
-	return -1;
-}
-int
-evutil_secure_rng_init(void)
-{
-	/* call arc4random() now to force it to self-initialize */
-	(void) arc4random();
-	return 0;
-}
-#ifndef EVENT__DISABLE_THREAD_SUPPORT
-int
-evutil_secure_rng_global_setup_locks_(const int enable_locks)
-{
-	return 0;
-}
-#endif
-static void
-evutil_free_secure_rng_globals_locks(void)
-{
-}
-
-static void
-ev_arc4random_buf(void *buf, size_t n)
-{
-#if defined(EVENT__HAVE_ARC4RANDOM_BUF) && !defined(__APPLE__)
-	arc4random_buf(buf, n);
-	return;
-#else
-	unsigned char *b = buf;
-
-#if defined(EVENT__HAVE_ARC4RANDOM_BUF)
-	/* OSX 10.7 introducd arc4random_buf, so if you build your program
-	 * there, you'll get surprised when older versions of OSX fail to run.
-	 * To solve this, we can check whether the function pointer is set,
-	 * and fall back otherwise.  (OSX does this using some linker
-	 * trickery.)
-	 */
-	{
-		void (*tptr)(void *,size_t) =
-		    (void (*)(void*,size_t))arc4random_buf;
-		if (tptr != NULL) {
-			arc4random_buf(buf, n);
-			return;
-		}
-	}
-#endif
-	/* Make sure that we start out with b at a 4-byte alignment; plenty
-	 * of CPUs care about this for 32-bit access. */
-	if (n >= 4 && ((ev_uintptr_t)b) & 3) {
-		ev_uint32_t u = arc4random();
-		int n_bytes = 4 - (((ev_uintptr_t)b) & 3);
-		memcpy(b, &u, n_bytes);
-		b += n_bytes;
-		n -= n_bytes;
-	}
-	while (n >= 4) {
-		*(ev_uint32_t*)b = arc4random();
-		b += 4;
-		n -= 4;
-	}
-	if (n) {
-		ev_uint32_t u = arc4random();
-		memcpy(b, &u, n);
-	}
-#endif
-}
-
-#else /* !EVENT__HAVE_ARC4RANDOM { */
-
-#ifdef EVENT__ssize_t
-#define ssize_t EVENT__ssize_t
-#endif
-#define ARC4RANDOM_EXPORT static
 #define ARC4_LOCK_() EVLOCK_LOCK(arc4rand_lock, 0)
 #define ARC4_UNLOCK_() EVLOCK_UNLOCK(arc4rand_lock, 0)
 #ifndef EVENT__DISABLE_THREAD_SUPPORT
 static void *arc4rand_lock;
 #endif
-
-#define ARC4RANDOM_UINT32 ev_uint32_t
-#define ARC4RANDOM_NOSTIR
-#define ARC4RANDOM_NORANDOM
-#define ARC4RANDOM_NOUNIFORM
 
 #include "./arc4random.c"
 
@@ -157,11 +72,9 @@ evutil_free_secure_rng_globals_locks(void)
 int
 evutil_secure_rng_set_urandom_device_file(char *fname)
 {
-#ifdef TRY_SEED_URANDOM
 	ARC4_LOCK_();
 	arc4random_urandom_filename = fname;
 	ARC4_UNLOCK_();
-#endif
 	return 0;
 }
 
@@ -182,7 +95,6 @@ ev_arc4random_buf(void *buf, size_t n)
 	arc4random_buf(buf, n);
 }
 
-#endif /* } !EVENT__HAVE_ARC4RANDOM */
 
 void
 evutil_secure_rng_get_bytes(void *buf, size_t n)
@@ -190,14 +102,12 @@ evutil_secure_rng_get_bytes(void *buf, size_t n)
 	ev_arc4random_buf(buf, n);
 }
 
-#if !defined(EVENT__HAVE_ARC4RANDOM) || defined(EVENT__HAVE_ARC4RANDOM_ADDRANDOM)
 void
 evutil_secure_rng_add_bytes(const char *buf, size_t n)
 {
 	arc4random_addrandom((unsigned char*)buf,
 	    n>(size_t)INT_MAX ? INT_MAX : (int)n);
 }
-#endif
 
 void
 evutil_free_secure_rng_globals_(void)

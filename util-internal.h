@@ -35,16 +35,11 @@
 #include "log-internal.h"
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef EVENT__HAVE_SYS_EVENTFD_H
 #include <sys/eventfd.h>
-#endif
 #include "event2/util.h"
 
 #include "time-internal.h"
-#include "ipv6-internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,37 +48,6 @@ extern "C" {
 /* __has_attribute() wrapper */
 #ifdef __has_attribute
 # define EVUTIL_HAS_ATTRIBUTE __has_attribute
-#endif
-/** clang 3 __has_attribute misbehaves in some versions */
-#if defined(__clang__) && __clang__ == 1
-# if defined(__apple_build_version__)
-#  if __clang_major__ <= 6
-#   undef EVUTIL_HAS_ATTRIBUTE
-#  endif
-# else /* !__apple_build_version__ */
-#  if __clang_major__ == 3 && __clang_minor__ >= 2 && __clang_minor__ <= 5
-#   undef EVUTIL_HAS_ATTRIBUTE
-#  endif
-# endif /* __apple_build_version__ */
-#endif /*\ defined(__clang__) && __clang__ == 1 */
-#ifndef EVUTIL_HAS_ATTRIBUTE
-# define EVUTIL_HAS_ATTRIBUTE(x) 0
-#endif
-
-/* If we need magic to say "inline", get it for free internally. */
-#ifdef EVENT__inline
-#define inline EVENT__inline
-#endif
-
-/* Define to appropriate substitute if compiler doesnt have __func__ */
-#if defined(EVENT__HAVE___func__)
-# ifndef __func__
-#  define __func__ __func__
-# endif
-#elif defined(EVENT__HAVE___FUNCTION__)
-# define __func__ __FUNCTION__
-#else
-# define __func__ __FILE__
 #endif
 
 /* A good no-op to use in macro definitions. */
@@ -104,17 +68,8 @@ extern "C" {
    read, write, connect, or accept means "no error; just wait for more
    data," and we need to look at the error code.  Second, Windows defines
    a different set of error codes for sockets. */
-
-#ifndef _WIN32
-
-#if EAGAIN == EWOULDBLOCK
 #define EVUTIL_ERR_IS_EAGAIN(e) \
 	((e) == EAGAIN)
-#else
-#define EVUTIL_ERR_IS_EAGAIN(e) \
-	((e) == EAGAIN || (e) == EWOULDBLOCK)
-#endif
-
 /* True iff e is an error that means a read/write operation can be retried. */
 #define EVUTIL_ERR_RW_RETRIABLE(e)				\
 	((e) == EINTR || EVUTIL_ERR_IS_EAGAIN(e))
@@ -128,47 +83,6 @@ extern "C" {
 /* True iff e is an error that means the connection was refused */
 #define EVUTIL_ERR_CONNECT_REFUSED(e)					\
 	((e) == ECONNREFUSED)
-
-#else
-/* Win32 */
-
-#define EVUTIL_ERR_IS_EAGAIN(e) \
-	((e) == WSAEWOULDBLOCK || (e) == EAGAIN)
-
-#define EVUTIL_ERR_RW_RETRIABLE(e)					\
-	((e) == WSAEWOULDBLOCK ||					\
-	    (e) == WSAEINTR)
-
-#define EVUTIL_ERR_CONNECT_RETRIABLE(e)					\
-	((e) == WSAEWOULDBLOCK ||					\
-	    (e) == WSAEINTR ||						\
-	    (e) == WSAEINPROGRESS ||					\
-	    (e) == WSAEINVAL)
-
-#define EVUTIL_ERR_ACCEPT_RETRIABLE(e)			\
-	EVUTIL_ERR_RW_RETRIABLE(e)
-
-#define EVUTIL_ERR_CONNECT_REFUSED(e)					\
-	((e) == WSAECONNREFUSED)
-
-#endif
-
-/* Arguments for shutdown() */
-#ifdef SHUT_RD
-#define EVUTIL_SHUT_RD SHUT_RD
-#else
-#define EVUTIL_SHUT_RD 0
-#endif
-#ifdef SHUT_WR
-#define EVUTIL_SHUT_WR SHUT_WR
-#else
-#define EVUTIL_SHUT_WR 1 /* SD_SEND */
-#endif
-#ifdef SHUT_BOTH
-#define EVUTIL_SHUT_BOTH SHUT_BOTH
-#else
-#define EVUTIL_SHUT_BOTH 2
-#endif
 
 /* Helper: Verify that all the elements in 'dlist' are internally consistent.
  * Checks for circular lists and bad prev/next pointers.
@@ -286,7 +200,7 @@ void evutil_rtrim_lws_(char *);
     }
  */
 #define EVUTIL_UPCAST(ptr, type, field)				\
-	((type *)(((char*)(ptr)) - evutil_offsetof(type, field)))
+	((type *)(((char*)(ptr)) - offsetof(type, field)))
 
 /* As open(pathname, flags, mode), except that the file is always opened with
  * the close-on-exec flag set. (And the mode argument is mandatory.)
@@ -298,25 +212,25 @@ int evutil_read_file_(const char *filename, char **content_out, size_t *len_out,
     int is_binary);
 
 EVENT2_EXPORT_SYMBOL
-int evutil_socket_connect_(evutil_socket_t *fd_ptr, const struct sockaddr *sa, int socklen);
+int evutil_socket_connect_(int *fd_ptr, const struct sockaddr *sa, int socklen);
 
-int evutil_socket_finished_connecting_(evutil_socket_t fd);
+int evutil_socket_finished_connecting_(int fd);
 
 EVENT2_EXPORT_SYMBOL
-int evutil_ersatz_socketpair_(int, int , int, evutil_socket_t[]);
+int evutil_ersatz_socketpair_(int, int , int, int[]);
 
 int evutil_resolve_(int family, const char *hostname, struct sockaddr *sa,
-    ev_socklen_t *socklen, int port);
+    socklen_t *socklen, int port);
 
 const char *evutil_getenv_(const char *name);
 
 /* Structure to hold the state of our weak random number generator.
  */
 struct evutil_weakrand_state {
-	ev_uint32_t seed;
+	uint32_t seed;
 };
 
-#define EVUTIL_WEAKRAND_MAX EV_INT32_MAX
+#define EVUTIL_WEAKRAND_MAX INT32_MAX
 
 /* Initialize the state of a week random number generator based on 'seed'.  If
  * the seed is 0, construct a new seed based on not-very-strong platform
@@ -328,18 +242,18 @@ struct evutil_weakrand_state {
  * evutil_secure_rng* functions instead.
  */
 EVENT2_EXPORT_SYMBOL
-ev_uint32_t evutil_weakrand_seed_(struct evutil_weakrand_state *state, ev_uint32_t seed);
+uint32_t evutil_weakrand_seed_(struct evutil_weakrand_state *state, uint32_t seed);
 /* Return a pseudorandom value between 0 and EVUTIL_WEAKRAND_MAX inclusive.
  * Updates the state in 'seed' as needed -- this value must be protected by a
  * lock.
  */
 EVENT2_EXPORT_SYMBOL
-ev_int32_t evutil_weakrand_(struct evutil_weakrand_state *seed);
+int32_t evutil_weakrand_(struct evutil_weakrand_state *seed);
 /* Return a pseudorandom value x such that 0 <= x < top. top must be no more
  * than EVUTIL_WEAKRAND_MAX. Updates the state in 'seed' as needed -- this
  * value must be proteced by a lock */
 EVENT2_EXPORT_SYMBOL
-ev_int32_t evutil_weakrand_range_(struct evutil_weakrand_state *seed, ev_int32_t top);
+int32_t evutil_weakrand_range_(struct evutil_weakrand_state *seed, int32_t top);
 
 /* Evaluates to the same boolean value as 'p', and hints to the compiler that
  * we expect this value to be false. */
@@ -377,21 +291,6 @@ ev_int32_t evutil_weakrand_range_(struct evutil_weakrand_state *seed, ev_int32_t
 #define EVUTIL_FAILURE_CHECK(cond) EVUTIL_UNLIKELY(cond)
 #endif
 
-#ifndef EVENT__HAVE_STRUCT_SOCKADDR_STORAGE
-/* Replacement for sockaddr storage that we can use internally on platforms
- * that lack it.  It is not space-efficient, but neither is sockaddr_storage.
- */
-struct sockaddr_storage {
-	union {
-		struct sockaddr ss_sa;
-		struct sockaddr_in ss_sin;
-		struct sockaddr_in6 ss_sin6;
-		char ss_padding[128];
-	} ss_union;
-};
-#define ss_family ss_union.ss_sa.sa_family
-#endif
-
 /* Internal addrinfo error code.  This one is returned from only from
  * evutil_getaddrinfo_common_, when we are sure that we'll have to hit a DNS
  * server. */
@@ -402,8 +301,8 @@ struct evdns_getaddrinfo_request;
 typedef struct evdns_getaddrinfo_request* (*evdns_getaddrinfo_fn)(
     struct evdns_base *base,
     const char *nodename, const char *servname,
-    const struct evutil_addrinfo *hints_in,
-    void (*cb)(int, struct evutil_addrinfo *, void *), void *arg);
+    const struct addrinfo *hints_in,
+    void (*cb)(int, struct addrinfo *, void *), void *arg);
 EVENT2_EXPORT_SYMBOL
 void evutil_set_evdns_getaddrinfo_fn_(evdns_getaddrinfo_fn fn);
 typedef void (*evdns_getaddrinfo_cancel_fn)(
@@ -412,22 +311,22 @@ EVENT2_EXPORT_SYMBOL
 void evutil_set_evdns_getaddrinfo_cancel_fn_(evdns_getaddrinfo_cancel_fn fn);
 
 EVENT2_EXPORT_SYMBOL
-struct evutil_addrinfo *evutil_new_addrinfo_(struct sockaddr *sa,
-    ev_socklen_t socklen, const struct evutil_addrinfo *hints);
+struct addrinfo *evutil_new_addrinfo_(struct sockaddr *sa,
+    socklen_t socklen, const struct addrinfo *hints);
 EVENT2_EXPORT_SYMBOL
-struct evutil_addrinfo *evutil_addrinfo_append_(struct evutil_addrinfo *first,
-    struct evutil_addrinfo *append);
+struct addrinfo *addrinfo_append_(struct addrinfo *first,
+    struct addrinfo *append);
 EVENT2_EXPORT_SYMBOL
-void evutil_adjust_hints_for_addrconfig_(struct evutil_addrinfo *hints);
+void evutil_adjust_hints_for_addrconfig_(struct addrinfo *hints);
 EVENT2_EXPORT_SYMBOL
 int evutil_getaddrinfo_common_(const char *nodename, const char *servname,
-    struct evutil_addrinfo *hints, struct evutil_addrinfo **res, int *portnum);
+    struct addrinfo *hints, struct addrinfo **res, int *portnum);
 
 struct evdns_getaddrinfo_request *evutil_getaddrinfo_async_(
     struct evdns_base *dns_base,
     const char *nodename, const char *servname,
-    const struct evutil_addrinfo *hints_in,
-    void (*cb)(int, struct evutil_addrinfo *, void *), void *arg);
+    const struct addrinfo *hints_in,
+    void (*cb)(int, struct addrinfo *, void *), void *arg);
 void evutil_getaddrinfo_cancel_async_(struct evdns_getaddrinfo_request *data);
 
 /** Return true iff sa is a looback address. (That is, it is 127.0.0.1/8, or
@@ -446,90 +345,31 @@ const char *evutil_format_sockaddr_port_(const struct sockaddr *sa, char *out, s
 
 int evutil_hex_char_to_int_(char c);
 
-
 void evutil_free_secure_rng_globals_(void);
 void evutil_free_globals_(void);
 
-#ifdef _WIN32
-EVENT2_EXPORT_SYMBOL
-HMODULE evutil_load_windows_system_library_(const TCHAR *library_name);
-#endif
-
-#ifndef EV_SIZE_FMT
-#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-#define EV_U64_FMT "%I64u"
-#define EV_I64_FMT "%I64d"
-#define EV_I64_ARG(x) ((__int64)(x))
-#define EV_U64_ARG(x) ((unsigned __int64)(x))
-#else
 #define EV_U64_FMT "%llu"
 #define EV_I64_FMT "%lld"
 #define EV_I64_ARG(x) ((long long)(x))
 #define EV_U64_ARG(x) ((unsigned long long)(x))
-#endif
-#endif
 
-#ifdef _WIN32
-#define EV_SOCK_FMT EV_I64_FMT
-#define EV_SOCK_ARG(x) EV_I64_ARG((x))
-#else
 #define EV_SOCK_FMT "%d"
 #define EV_SOCK_ARG(x) (x)
-#endif
 
-#if defined(__STDC__) && defined(__STDC_VERSION__) && !defined(__MINGW64_VERSION_MAJOR)
-#if (__STDC_VERSION__ >= 199901L)
 #define EV_SIZE_FMT "%zu"
 #define EV_SSIZE_FMT "%zd"
 #define EV_SIZE_ARG(x) (x)
 #define EV_SSIZE_ARG(x) (x)
-#endif
-#endif
-
-#ifndef EV_SIZE_FMT
-#if (EVENT__SIZEOF_SIZE_T <= EVENT__SIZEOF_LONG)
-#define EV_SIZE_FMT "%lu"
-#define EV_SSIZE_FMT "%ld"
-#define EV_SIZE_ARG(x) ((unsigned long)(x))
-#define EV_SSIZE_ARG(x) ((long)(x))
-#else
-#define EV_SIZE_FMT EV_U64_FMT
-#define EV_SSIZE_FMT EV_I64_FMT
-#define EV_SIZE_ARG(x) EV_U64_ARG(x)
-#define EV_SSIZE_ARG(x) EV_I64_ARG(x)
-#endif
-#endif
 
 EVENT2_EXPORT_SYMBOL
-evutil_socket_t evutil_socket_(int domain, int type, int protocol);
-evutil_socket_t evutil_accept4_(evutil_socket_t sockfd, struct sockaddr *addr,
-    ev_socklen_t *addrlen, int flags);
+int evutil_socket_(int domain, int type, int protocol);
+int evutil_accept4_(int sockfd, struct sockaddr *addr,
+    socklen_t *addrlen, int flags);
 
     /* used by one of the test programs.. */
 EVENT2_EXPORT_SYMBOL
-int evutil_make_internal_pipe_(evutil_socket_t fd[2]);
-evutil_socket_t evutil_eventfd_(unsigned initval, int flags);
-
-#ifdef SOCK_NONBLOCK
-#define EVUTIL_SOCK_NONBLOCK SOCK_NONBLOCK
-#else
-#define EVUTIL_SOCK_NONBLOCK 0x4000000
-#endif
-#ifdef SOCK_CLOEXEC
-#define EVUTIL_SOCK_CLOEXEC SOCK_CLOEXEC
-#else
-#define EVUTIL_SOCK_CLOEXEC 0x80000000
-#endif
-#ifdef EFD_NONBLOCK
-#define EVUTIL_EFD_NONBLOCK EFD_NONBLOCK
-#else
-#define EVUTIL_EFD_NONBLOCK 0x4000
-#endif
-#ifdef EFD_CLOEXEC
-#define EVUTIL_EFD_CLOEXEC EFD_CLOEXEC
-#else
-#define EVUTIL_EFD_CLOEXEC 0x8000
-#endif
+int evutil_make_internal_pipe_(int fd[2]);
+int evutil_eventfd_(unsigned initval, int flags);
 
 void evutil_memclear_(void *mem, size_t len);
 

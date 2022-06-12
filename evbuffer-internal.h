@@ -43,19 +43,12 @@ extern "C" {
  * arguments. */
 #define EVBUFFER_CB_NODEFER 2
 
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 #include <sys/queue.h>
 
 /* Minimum allocation for a chain.  We define this so that we're burning no
  * more than 5% of each allocation on overhead.  It would be nice to lose even
  * less space, though. */
-#if EVENT__SIZEOF_VOID_P < 8
-#define MIN_BUFFER_SIZE	512
-#else
 #define MIN_BUFFER_SIZE	1024
-#endif
 
 /** A single evbuffer callback for an evbuffer. This function will be invoked
  * when bytes are added to or removed from the evbuffer. */
@@ -72,7 +65,7 @@ struct evbuffer_cb_entry {
 	/** Argument to pass to cb. */
 	void *cbarg;
 	/** Currently set flags on this callback. */
-	ev_uint32_t flags;
+	uint32_t flags;
 };
 
 struct bufferevent;
@@ -127,12 +120,8 @@ struct evbuffer {
 	 * overflows when we have mutually recursive callbacks, and for
 	 * serializing callbacks in a single thread. */
 	unsigned deferred_cbs : 1;
-#ifdef _WIN32
-	/** True iff this buffer is set up for overlapped IO. */
-	unsigned is_overlapped : 1;
-#endif
 	/** Zero or more EVBUFFER_FLAG_* bits */
-	ev_uint32_t flags;
+	uint32_t flags;
 
 	/** Used to implement deferred callbacks. */
 	struct event_base *cb_queue;
@@ -155,17 +144,8 @@ struct evbuffer {
 	struct bufferevent *parent;
 };
 
-#if EVENT__SIZEOF_OFF_T < EVENT__SIZEOF_SIZE_T
-typedef ev_ssize_t ev_misalign_t;
+typedef off_t ev_misalign_t;
 #define EVBUFFER_CHAIN_MAX ((size_t)EV_SSIZE_MAX)
-#else
-typedef ev_off_t ev_misalign_t;
-#if EVENT__SIZEOF_OFF_T > EVENT__SIZEOF_SIZE_T
-#define EVBUFFER_CHAIN_MAX EV_SIZE_MAX
-#else
-#define EVBUFFER_CHAIN_MAX ((size_t)EV_SSIZE_MAX)
-#endif
-#endif
 
 /** A single item in an evbuffer. */
 struct evbuffer_chain {
@@ -225,10 +205,6 @@ struct evbuffer_chain_reference {
  * evbuffer_chain with the EVBUFFER_FILESEGMENT flag set.  */
 struct evbuffer_chain_file_segment {
 	struct evbuffer_file_segment *segment;
-#ifdef _WIN32
-	/** If we're using CreateFileMapping, this is the handle to the view. */
-	HANDLE view_handle;
-#endif
 };
 
 /* Declared in event2/buffer.h; defined here. */
@@ -245,20 +221,16 @@ struct evbuffer_file_segment {
 	int fd;
 	/** If we're using mmap, this is the raw mapped memory. */
 	void *mapping;
-#ifdef _WIN32
-	/** If we're using CreateFileMapping, this is the mapping */
-	HANDLE mapping_handle;
-#endif
 	/** If we're using mmap or IO, this is the content of the file
 	 * segment. */
 	char *contents;
 	/** Position of this segment within the file. */
-	ev_off_t file_offset;
+	off_t file_offset;
 	/** If we're using mmap, this is the offset within 'mapping' where
 	 * this data segment begins. */
-	ev_off_t mmap_offset;
+	off_t mmap_offset;
 	/** The length of this segment. */
-	ev_off_t length;
+	off_t length;
 	/** Cleanup callback function */
 	evbuffer_file_segment_cleanup_cb cleanup_cb;
 	/** Argument to be pass to cleanup callback function */
@@ -322,11 +294,11 @@ int evbuffer_expand_fast_(struct evbuffer *, size_t, int);
  * extent, and *chainp to point to the first chain that we'll try to read into.
  * Returns the number of vecs used.
  */
-int evbuffer_read_setup_vecs_(struct evbuffer *buf, ev_ssize_t howmuch,
-    struct evbuffer_iovec *vecs, int n_vecs, struct evbuffer_chain ***chainp,
+int evbuffer_read_setup_vecs_(struct evbuffer *buf, ssize_t howmuch,
+    struct iovec *vecs, int n_vecs, struct evbuffer_chain ***chainp,
     int exact);
 
-/* Helper macro: copies an evbuffer_iovec in ei to a win32 WSABUF in i. */
+/* Helper macro: copies an iovec in ei to a win32 WSABUF in i. */
 #define WSABUF_FROM_EVBUFFER_IOV(i,ei) do {		\
 		(i)->buf = (ei)->iov_base;		\
 		(i)->len = (unsigned long)(ei)->iov_len;	\

@@ -87,15 +87,8 @@ evthread_posix_get_id(void)
 {
 	union {
 		pthread_t thr;
-#if EVENT__SIZEOF_PTHREAD_T > EVENT__SIZEOF_LONG
-		ev_uint64_t id;
-#else
 		unsigned long id;
-#endif
 	} r;
-#if EVENT__SIZEOF_PTHREAD_T < EVENT__SIZEOF_LONG
-	memset(&r, 0, sizeof(r));
-#endif
 	r.thr = pthread_self();
 	return (unsigned long)r.id;
 }
@@ -143,8 +136,8 @@ evthread_posix_cond_wait(void *cond_, void *lock_, const struct timeval *tv)
 	if (tv) {
 		struct timeval now, abstime;
 		struct timespec ts;
-		evutil_gettimeofday(&now, NULL);
-		evutil_timeradd(&now, tv, &abstime);
+		gettimeofday(&now, NULL);
+		timeradd(&now, tv, &abstime);
 		ts.tv_sec = abstime.tv_sec;
 		ts.tv_nsec = abstime.tv_usec*1000;
 		r = pthread_cond_timedwait(cond, lock, &ts);

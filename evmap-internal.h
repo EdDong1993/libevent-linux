@@ -39,14 +39,14 @@ struct event;
 
 /** Initialize an event_map for use.
  */
-void evmap_io_initmap_(struct event_io_map* ctx);
+void evmap_io_initmap_(struct event_signal_map* ctx);
 void evmap_signal_initmap_(struct event_signal_map* ctx);
 
 /** Remove all entries from an event_map.
 
 	@param ctx the map to clear.
  */
-void evmap_io_clear_(struct event_io_map* ctx);
+void evmap_io_clear_(struct event_signal_map* ctx);
 void evmap_signal_clear_(struct event_signal_map* ctx);
 
 /** Add an IO event (some combination of EV_READ or EV_WRITE) to an
@@ -59,7 +59,7 @@ void evmap_signal_clear_(struct event_signal_map* ctx);
     @param fd the file descriptor corresponding to ev.
     @param ev the event to add.
 */
-int evmap_io_add_(struct event_base *base, evutil_socket_t fd, struct event *ev);
+int evmap_io_add_(struct event_base *base, int fd, struct event *ev);
 /** Remove an IO event (some combination of EV_READ or EV_WRITE) to an
     event_base's list of events on a given file descriptor, and tell the
     underlying eventops about the fd if its state has changed.
@@ -68,14 +68,14 @@ int evmap_io_add_(struct event_base *base, evutil_socket_t fd, struct event *ev)
     @param fd the file descriptor corresponding to ev.
     @param ev the event to remove.
  */
-int evmap_io_del_(struct event_base *base, evutil_socket_t fd, struct event *ev);
+int evmap_io_del_(struct event_base *base, int fd, struct event *ev);
 /** Active the set of events waiting on an event_base for a given fd.
 
     @param base the event_base to operate on.
     @param fd the file descriptor that has become active.
     @param events a bitmask of EV_READ|EV_WRITE|EV_ET.
 */
-void evmap_io_active_(struct event_base *base, evutil_socket_t fd, short events);
+void evmap_io_active_(struct event_base *base, int fd, short events);
 
 
 /* These functions behave in the same way as evmap_io_*, except they work on
@@ -83,12 +83,12 @@ void evmap_io_active_(struct event_base *base, evutil_socket_t fd, short events)
  * either a linear map or a hashtable. */
 int evmap_signal_add_(struct event_base *base, int signum, struct event *ev);
 int evmap_signal_del_(struct event_base *base, int signum, struct event *ev);
-void evmap_signal_active_(struct event_base *base, evutil_socket_t signum, int ncalls);
+void evmap_signal_active_(struct event_base *base, int signum, int ncalls);
 
 /* Return the fdinfo object associated with a given fd.  If the fd has no
  * events associated with it, the result may be NULL.
  */
-void *evmap_io_get_fdinfo_(struct event_io_map *ctx, evutil_socket_t fd);
+void *evmap_io_get_fdinfo_(struct event_signal_map *ctx, int fd);
 
 /* Helper for event_reinit(): Tell the backend to re-add every fd and signal
  * for which we have a pending event.

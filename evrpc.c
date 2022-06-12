@@ -27,26 +27,13 @@
 #include "event2/event-config.h"
 #include "evconfig-private.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
-
 #include <sys/types.h>
-#ifndef _WIN32
 #include <sys/socket.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef _WIN32
 #include <unistd.h>
-#endif
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
@@ -593,7 +580,7 @@ evrpc_pool_add_connection(struct evrpc_pool *pool,
 	 * unless a timeout was specifically set for a connection,
 	 * the connection inherits the timeout from the pool.
 	 */
-	if (!evutil_timerisset(&connection->timeout))
+	if (!timerisset(&connection->timeout))
 		evhttp_connection_set_timeout(connection, pool->timeout);
 
 	/*
@@ -628,7 +615,7 @@ evrpc_pool_set_timeout(struct evrpc_pool *pool, int timeout_in_secs)
 
 
 static void evrpc_reply_done(struct evhttp_request *, void *);
-static void evrpc_request_timeout(evutil_socket_t, short, void *);
+static void evrpc_request_timeout(int, short, void *);
 
 /*
  * Finds a connection object associated with the pool that is currently
@@ -737,7 +724,7 @@ evrpc_schedule_request_closure(void *arg, enum EVRPC_HOOK_RESULT hook_res)
 		 * a timeout after which the whole rpc is going to be aborted.
 		 */
 		struct timeval tv;
-		evutil_timerclear(&tv);
+		timerclear(&tv);
 		tv.tv_sec = pool->timeout;
 		evtimer_add(&ctx->ev_timeout, &tv);
 	}
@@ -967,7 +954,7 @@ evrpc_pool_schedule(struct evrpc_pool *pool)
 }
 
 static void
-evrpc_request_timeout(evutil_socket_t fd, short what, void *arg)
+evrpc_request_timeout(int fd, short what, void *arg)
 {
 	struct evrpc_request_wrapper *ctx = arg;
 	struct evhttp_connection *evcon = ctx->evcon;

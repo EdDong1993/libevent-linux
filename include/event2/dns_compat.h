@@ -40,12 +40,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 /* For int types. */
 #include <event2/util.h>
@@ -342,14 +338,8 @@ void evdns_search_ndots_set(const int ndots);
 */
 EVENT2_EXPORT_SYMBOL
 struct evdns_server_port *
-evdns_add_server_port(evutil_socket_t socket, int flags,
+evdns_add_server_port(int socket, int flags,
 	evdns_request_callback_fn_type callback, void *user_data);
-
-#ifdef _WIN32
-EVENT2_EXPORT_SYMBOL
-int evdns_config_windows_nameservers(void);
-#define EVDNS_CONFIG_WINDOWS_NAMESERVERS_IMPLEMENTED
-#endif
 
 #ifdef __cplusplus
 }

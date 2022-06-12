@@ -30,21 +30,13 @@
 
 #include <sys/types.h>
 
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_STDARG_H
 #include <stdarg.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 
 #include "event2/util.h"
 #include "event2/buffer.h"
@@ -176,7 +168,7 @@ bufferevent_run_deferred_callbacks_locked(struct event_callback *cb, void *arg)
 		int err = bufev_private->errno_pending;
 		bufev_private->eventcb_pending = 0;
 		bufev_private->errno_pending = 0;
-		EVUTIL_SET_SOCKET_ERROR(err);
+		errno = err;
 		bufev->errorcb(bufev, what, bufev->cbarg);
 	}
 	bufferevent_decref_and_unlock_(bufev);
@@ -221,7 +213,7 @@ bufferevent_run_deferred_callbacks_unlocked(struct event_callback *cb, void *arg
 		int err = bufev_private->errno_pending;
 		bufev_private->eventcb_pending = 0;
 		bufev_private->errno_pending = 0;
-		EVUTIL_SET_SOCKET_ERROR(err);
+		errno = err;
 		UNLOCKED(errorcb(bufev,what,cbarg));
 	}
 	bufferevent_decref_and_unlock_(bufev);
@@ -290,7 +282,7 @@ bufferevent_run_eventcb_(struct bufferevent *bufev, short what, int options)
 		return;
 	if ((p->options|options) & BEV_OPT_DEFER_CALLBACKS) {
 		p->eventcb_pending |= what;
-		p->errno_pending = EVUTIL_SOCKET_ERROR();
+		p->errno_pending = errno;
 		SCHEDULE_DEFERRED(p);
 	} else {
 		bufev->errorcb(bufev, what, bufev->cbarg);
@@ -327,8 +319,8 @@ bufferevent_init_common_(struct bufferevent_private *bufev_private,
 	bufev->ev_base = base;
 
 	/* Disable timeouts. */
-	evutil_timerclear(&bufev->timeout_read);
-	evutil_timerclear(&bufev->timeout_write);
+	timerclear(&bufev->timeout_read);
+	timerclear(&bufev->timeout_write);
 
 	bufev->be_ops = ops;
 
@@ -512,12 +504,12 @@ bufferevent_set_timeouts(struct bufferevent *bufev,
 	if (tv_read) {
 		bufev->timeout_read = *tv_read;
 	} else {
-		evutil_timerclear(&bufev->timeout_read);
+		timerclear(&bufev->timeout_read);
 	}
 	if (tv_write) {
 		bufev->timeout_write = *tv_write;
 	} else {
-		evutil_timerclear(&bufev->timeout_write);
+		timerclear(&bufev->timeout_write);
 	}
 
 	if (bufev->be_ops->adj_timeouts)
@@ -684,24 +676,6 @@ bufferevent_incref_and_lock_(struct bufferevent *bufev)
 	++bufev_private->refcnt;
 }
 
-#if 0
-static void
-bufferevent_transfer_lock_ownership_(struct bufferevent *donor,
-    struct bufferevent *recipient)
-{
-	struct bufferevent_private *d = BEV_UPCAST(donor);
-	struct bufferevent_private *r = BEV_UPCAST(recipient);
-	if (d->lock != r->lock)
-		return;
-	if (r->own_lock)
-		return;
-	if (d->own_lock) {
-		d->own_lock = 0;
-		r->own_lock = 1;
-	}
-}
-#endif
-
 int
 bufferevent_decref_and_unlock_(struct bufferevent *bufev)
 {
@@ -862,7 +836,7 @@ bufferevent_enable_locking_(struct bufferevent *bufev, void *lock)
 }
 
 int
-bufferevent_setfd(struct bufferevent *bev, evutil_socket_t fd)
+bufferevent_setfd(struct bufferevent *bev, int fd)
 {
 	union bufferevent_ctrl_data d;
 	int res = -1;
@@ -876,7 +850,7 @@ bufferevent_setfd(struct bufferevent *bev, evutil_socket_t fd)
 	return res;
 }
 
-evutil_socket_t
+int
 bufferevent_getfd(struct bufferevent *bev)
 {
 	union bufferevent_ctrl_data d;
@@ -939,7 +913,7 @@ bufferevent_get_underlying(struct bufferevent *bev)
 }
 
 static void
-bufferevent_generic_read_timeout_cb(evutil_socket_t fd, short event, void *ctx)
+bufferevent_generic_read_timeout_cb(int fd, short event, void *ctx)
 {
 	struct bufferevent *bev = ctx;
 	bufferevent_incref_and_lock_(bev);
@@ -948,7 +922,7 @@ bufferevent_generic_read_timeout_cb(evutil_socket_t fd, short event, void *ctx)
 	bufferevent_decref_and_unlock_(bev);
 }
 static void
-bufferevent_generic_write_timeout_cb(evutil_socket_t fd, short event, void *ctx)
+bufferevent_generic_write_timeout_cb(int fd, short event, void *ctx)
 {
 	struct bufferevent *bev = ctx;
 	bufferevent_incref_and_lock_(bev);
@@ -973,13 +947,13 @@ bufferevent_generic_adj_timeouts_(struct bufferevent *bev)
 	struct bufferevent_private *bev_p = BEV_UPCAST(bev);
 	int r1=0, r2=0;
 	if ((enabled & EV_READ) && !bev_p->read_suspended &&
-	    evutil_timerisset(&bev->timeout_read))
+	    timerisset(&bev->timeout_read))
 		r1 = event_add(&bev->ev_read, &bev->timeout_read);
 	else
 		r1 = event_del(&bev->ev_read);
 
 	if ((enabled & EV_WRITE) && !bev_p->write_suspended &&
-	    evutil_timerisset(&bev->timeout_write) &&
+	    timerisset(&bev->timeout_write) &&
 	    evbuffer_get_length(bev->output))
 		r2 = event_add(&bev->ev_write, &bev->timeout_write);
 	else
@@ -994,7 +968,7 @@ bufferevent_generic_adj_existing_timeouts_(struct bufferevent *bev)
 {
 	int r = 0;
 	if (event_pending(&bev->ev_read, EV_READ, NULL)) {
-		if (evutil_timerisset(&bev->timeout_read)) {
+		if (timerisset(&bev->timeout_read)) {
 			    if (bufferevent_add_event_(&bev->ev_read, &bev->timeout_read) < 0)
 				    r = -1;
 		} else {
@@ -1002,7 +976,7 @@ bufferevent_generic_adj_existing_timeouts_(struct bufferevent *bev)
 		}
 	}
 	if (event_pending(&bev->ev_write, EV_WRITE, NULL)) {
-		if (evutil_timerisset(&bev->timeout_write)) {
+		if (timerisset(&bev->timeout_write)) {
 			if (bufferevent_add_event_(&bev->ev_write, &bev->timeout_write) < 0)
 				r = -1;
 		} else {
@@ -1015,7 +989,7 @@ bufferevent_generic_adj_existing_timeouts_(struct bufferevent *bev)
 int
 bufferevent_add_event_(struct event *ev, const struct timeval *tv)
 {
-	if (!evutil_timerisset(tv))
+	if (!timerisset(tv))
 		return event_add(ev, NULL);
 	else
 		return event_add(ev, tv);

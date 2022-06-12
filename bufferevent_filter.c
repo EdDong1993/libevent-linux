@@ -32,21 +32,13 @@
 
 #include "event2/event-config.h"
 
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_STDARG_H
 #include <stdarg.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 
 #include "event2/util.h"
 #include "event2/bufferevent.h"
@@ -102,7 +94,7 @@ struct bufferevent_filtered {
 
 const struct bufferevent_ops bufferevent_ops_filter = {
 	"filter",
-	evutil_offsetof(struct bufferevent_filtered, bev.bev),
+	offsetof(struct bufferevent_filtered, bev.bev),
 	be_filter_enable,
 	be_filter_disable,
 	be_filter_unlink,
@@ -121,7 +113,7 @@ upcast(struct bufferevent *bev)
 	if (!BEV_IS_FILTER(bev))
 		return NULL;
 	bev_f = (void*)( ((char*)bev) -
-			 evutil_offsetof(struct bufferevent_filtered, bev.bev));
+			 offsetof(struct bufferevent_filtered, bev.bev));
 	EVUTIL_ASSERT(BEV_IS_FILTER(&bev_f->bev.bev));
 	return bev_f;
 }
@@ -156,7 +148,7 @@ be_readbuf_full(struct bufferevent_filtered *bevf,
 
 /* Filter to use when we're created with a NULL filter. */
 static enum bufferevent_filter_result
-be_null_filter(struct evbuffer *src, struct evbuffer *dst, ev_ssize_t lim,
+be_null_filter(struct evbuffer *src, struct evbuffer *dst, ssize_t lim,
 	       enum bufferevent_flush_mode state, void *ctx)
 {
 	(void)state;
@@ -315,7 +307,7 @@ be_filter_process_input(struct bufferevent_filtered *bevf,
 	}
 
 	do {
-		ev_ssize_t limit = -1;
+		ssize_t limit = -1;
 		if (state == BEV_NORMAL && bev->wm_read.high)
 			limit = bev->wm_read.high -
 			    evbuffer_get_length(bev->input);
@@ -369,7 +361,7 @@ be_filter_process_output(struct bufferevent_filtered *bevf,
 		again = 0;
 
 		do {
-			ev_ssize_t limit = -1;
+			ssize_t limit = -1;
 			if (state == BEV_NORMAL &&
 			    bevf->underlying->wm_write.high)
 				limit = bevf->underlying->wm_write.high -

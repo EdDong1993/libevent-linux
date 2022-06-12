@@ -38,10 +38,10 @@ extern "C" {
 struct ev_token_bucket {
 	/** How many bytes are we willing to read or write right now? These
 	 * values are signed so that we can do "defecit spending" */
-	ev_ssize_t read_limit, write_limit;
+	ssize_t read_limit, write_limit;
 	/** When was this bucket last updated?  Measured in abstract 'ticks'
 	 * relative to the token bucket configuration. */
-	ev_uint32_t last_updated;
+	uint32_t last_updated;
 };
 
 /** Configuration info for a token bucket or set of token buckets. */
@@ -67,11 +67,11 @@ struct ev_token_bucket_cfg {
  * 'cfg'. */
 int ev_token_bucket_update_(struct ev_token_bucket *bucket,
     const struct ev_token_bucket_cfg *cfg,
-    ev_uint32_t current_tick);
+    uint32_t current_tick);
 
 /** In which tick does 'tv' fall according to 'cfg'?  Note that ticks can
  * overflow easily; your code needs to handle this. */
-ev_uint32_t ev_token_bucket_get_tick_(const struct timeval *tv,
+uint32_t ev_token_bucket_get_tick_(const struct timeval *tv,
     const struct ev_token_bucket_cfg *cfg);
 
 /** Adjust 'bucket' to respect 'cfg', and note that it was last updated in
@@ -81,7 +81,7 @@ ev_uint32_t ev_token_bucket_get_tick_(const struct timeval *tv,
  */
 int ev_token_bucket_init_(struct ev_token_bucket *bucket,
     const struct ev_token_bucket_cfg *cfg,
-    ev_uint32_t current_tick,
+    uint32_t current_tick,
     int reinitialize);
 
 int bufferevent_remove_from_rate_limit_group_internal_(struct bufferevent *bev,

@@ -28,71 +28,33 @@
 #include "event2/event-config.h"
 #include "evconfig-private.h"
 
-#ifdef EVENT__HAVE_SYS_PARAM_H
 #include <sys/param.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
 
-#ifdef HAVE_SYS_IOCCOM_H
-#include <sys/ioccom.h>
-#endif
-#ifdef EVENT__HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-#ifdef EVENT__HAVE_SYS_WAIT_H
 #include <sys/wait.h>
-#endif
 
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <sys/stat.h>
-#else /* _WIN32 */
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif /* _WIN32 */
 
-#ifdef EVENT__HAVE_SYS_UN_H
 #include <sys/un.h>
-#endif
-#ifdef EVENT__HAVE_AFUNIX_H
-#include <afunix.h>
-#endif
 
 #include <sys/queue.h>
 
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef EVENT__HAVE_ARPA_INET_H
 #include <arpa/inet.h>
-#endif
-#ifdef EVENT__HAVE_NETDB_H
 #include <netdb.h>
-#endif
 
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32
 #include <syslog.h>
-#endif /* !_WIN32 */
 #include <signal.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
 
 #undef timeout_pending
 #undef timeout_initialized
@@ -112,57 +74,6 @@
 #include "mm-internal.h"
 #include "bufferevent-internal.h"
 
-#ifndef EVENT__HAVE_GETNAMEINFO
-#define NI_MAXSERV 32
-#define NI_MAXHOST 1025
-
-#ifndef NI_NUMERICHOST
-#define NI_NUMERICHOST 1
-#endif
-
-#ifndef NI_NUMERICSERV
-#define NI_NUMERICSERV 2
-#endif
-
-static int
-fake_getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
-	size_t hostlen, char *serv, size_t servlen, int flags)
-{
-	struct sockaddr_in *sin = (struct sockaddr_in *)sa;
-
-	if (serv != NULL) {
-		char tmpserv[16];
-		evutil_snprintf(tmpserv, sizeof(tmpserv),
-		    "%d", ntohs(sin->sin_port));
-		if (strlcpy(serv, tmpserv, servlen) >= servlen)
-			return (-1);
-	}
-
-	if (host != NULL) {
-		if (flags & NI_NUMERICHOST) {
-			if (strlcpy(host, inet_ntoa(sin->sin_addr),
-			    hostlen) >= hostlen)
-				return (-1);
-			else
-				return (0);
-		} else {
-			struct hostent *hp;
-			hp = gethostbyaddr((char *)&sin->sin_addr,
-			    sizeof(struct in_addr), AF_INET);
-			if (hp == NULL)
-				return (-2);
-
-			if (strlcpy(host, hp->h_name, hostlen) >= hostlen)
-				return (-1);
-			else
-				return (0);
-		}
-	}
-	return (0);
-}
-
-#endif
-
 #define REQ_VERSION_BEFORE(req, major_v, minor_v)			\
 	((req)->major < (major_v) ||					\
 	    ((req)->major == (major_v) && (req)->minor < (minor_v)))
@@ -177,9 +88,9 @@ fake_getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
 
 extern int debug;
 
-static evutil_socket_t create_bind_socket_nonblock(struct evutil_addrinfo *, int reuse);
-static evutil_socket_t bind_socket(const char *, ev_uint16_t, int reuse);
-static void name_from_addr(struct sockaddr *, ev_socklen_t, char **, char **);
+static int create_bind_socket_nonblock(struct addrinfo *, int reuse);
+static int bind_socket(const char *, uint16_t, int reuse);
+static void name_from_addr(struct sockaddr *, socklen_t, char **, char **);
 static struct evhttp_uri *evhttp_uri_parse_authority(char *source_uri);
 static int evhttp_associate_new_request_with_connection(
 	struct evhttp_connection *evcon);
@@ -195,7 +106,7 @@ static void evhttp_read_header(struct evhttp_connection *evcon,
 static int evhttp_add_header_internal(struct evkeyvalq *headers,
     const char *key, const char *value);
 static const char *evhttp_response_phrase_internal(int code);
-static void evhttp_get_request(struct evhttp *, evutil_socket_t, struct sockaddr *, ev_socklen_t);
+static void evhttp_get_request(struct evhttp *, int, struct sockaddr *, socklen_t);
 static void evhttp_write_buffer(struct evhttp_connection *,
     void (*)(struct evhttp_connection *, void *), void *);
 static void evhttp_make_header(struct evhttp_connection *, struct evhttp_request *);
@@ -207,26 +118,6 @@ static void evhttp_error_cb(struct bufferevent *bufev, short what, void *arg);
 static int evhttp_find_vhost(struct evhttp *http, struct evhttp **outhttp,
 		  const char *hostname);
 
-#ifndef EVENT__HAVE_STRSEP
-/* strsep replacement for platforms that lack it.  Only works if
- * del is one character long. */
-static char *
-strsep(char **s, const char *del)
-{
-	char *d, *tok;
-	EVUTIL_ASSERT(strlen(del) == 1);
-	if (!s || !*s)
-		return NULL;
-	tok = *s;
-	d = strstr(tok, del);
-	if (d) {
-		*d = '\0';
-		*s = d + 1;
-	} else
-		*s = NULL;
-	return tok;
-}
-#endif
 
 static size_t
 html_replace(const char ch, const char **escaped)
@@ -636,7 +527,7 @@ evhttp_make_header(struct evhttp_connection *evcon, struct evhttp_request *req)
 
 void
 evhttp_connection_set_max_headers_size(struct evhttp_connection *evcon,
-    ev_ssize_t new_max_headers_size)
+    ssize_t new_max_headers_size)
 {
 	if (new_max_headers_size<0)
 		evcon->max_headers_size = EV_SIZE_MAX;
@@ -645,10 +536,10 @@ evhttp_connection_set_max_headers_size(struct evhttp_connection *evcon,
 }
 void
 evhttp_connection_set_max_body_size(struct evhttp_connection* evcon,
-    ev_ssize_t new_max_body_size)
+    ssize_t new_max_body_size)
 {
 	if (new_max_body_size<0)
-		evcon->max_body_size = EV_UINT64_MAX;
+		evcon->max_body_size = UINT64_MAX;
 	else
 		evcon->max_body_size = new_max_body_size;
 }
@@ -734,7 +625,7 @@ void
 evhttp_connection_fail_(struct evhttp_connection *evcon,
     enum evhttp_request_error error)
 {
-	const int errsave = EVUTIL_SOCKET_ERROR();
+	const int errsave = errno;
 	struct evhttp_request* req = TAILQ_FIRST(&evcon->requests);
 	void (*cb)(struct evhttp_request *, void *);
 	void *cb_arg;
@@ -792,7 +683,7 @@ evhttp_connection_fail_(struct evhttp_connection *evcon,
 	 * Let's restore the original errno, so that the user's
 	 * callback can have a better idea of what the error was.
 	 */
-	EVUTIL_SET_SOCKET_ERROR(errsave);
+	errno = errsave;
 
 	/* inform the user */
 	if (error_cb != NULL)
@@ -924,7 +815,7 @@ evhttp_handle_chunked_read(struct evhttp_request *req, struct evbuffer *buf)
 
 		if (req->ntoread < 0) {
 			/* Read chunk size */
-			ev_int64_t ntoread;
+			int64_t ntoread;
 			char *p = evbuffer_readln(buf, NULL, EVBUFFER_EOL_CRLF);
 			char *endp;
 			int error;
@@ -946,7 +837,7 @@ evhttp_handle_chunked_read(struct evhttp_request *req, struct evbuffer *buf)
 			}
 
 			/* ntoread is signed int64, body_size is unsigned size_t, check for under/overflow conditions */
-			if ((ev_uint64_t)ntoread > EV_SIZE_MAX - req->body_size) {
+			if ((uint64_t)ntoread > EV_SIZE_MAX - req->body_size) {
 			    return DATA_CORRUPTED;
 			}
 
@@ -972,7 +863,7 @@ evhttp_handle_chunked_read(struct evhttp_request *req, struct evbuffer *buf)
 		}
 
 		/* don't have enough to complete a chunk; wait for more */
-		if (req->ntoread > 0 && buflen < (ev_uint64_t)req->ntoread)
+		if (req->ntoread > 0 && buflen < (uint64_t)req->ntoread)
 			return (MORE_DATA_EXPECTED);
 
 		/* Completed chunk */
@@ -1158,21 +1049,7 @@ evhttp_read_cb(struct bufferevent *bufev, void *arg)
 		evhttp_read_trailer(evcon, req);
 		break;
 	case EVCON_IDLE:
-		{
-#ifdef USE_DEBUG
-			struct evbuffer *input;
-			size_t total_len;
-
-			input = bufferevent_get_input(evcon->bufev);
-			total_len = evbuffer_get_length(input);
-			event_debug(("%s: read "EV_SIZE_FMT
-				" bytes in EVCON_IDLE state,"
-				" resetting connection",
-				__func__, EV_SIZE_ARG(total_len)));
-#endif
-
-			evhttp_connection_reset_(evcon);
-		}
+		evhttp_connection_reset_(evcon);
 		break;
 	case EVCON_DISCONNECTED:
 	case EVCON_CONNECTING:
@@ -1261,7 +1138,7 @@ evhttp_connection_free(struct evhttp_connection *evcon)
 	}
 
 	if (evcon->fd != -1) {
-		shutdown(evcon->fd, EVUTIL_SHUT_WR);
+		shutdown(evcon->fd, SHUT_WR);
 		if (need_close)
 			evutil_closesocket(evcon->fd);
 	}
@@ -1293,7 +1170,7 @@ evhttp_connection_set_local_address(struct evhttp_connection *evcon,
 
 void
 evhttp_connection_set_local_port(struct evhttp_connection *evcon,
-    ev_uint16_t port)
+    uint16_t port)
 {
 	EVUTIL_ASSERT(evcon->state == EVCON_DISCONNECTED);
 	evcon->bind_port = port;
@@ -1355,7 +1232,7 @@ evhttp_connection_reset_(struct evhttp_connection *evcon)
 		if (evhttp_connected(evcon) && evcon->closecb != NULL)
 			(*evcon->closecb)(evcon, evcon->closecb_arg);
 
-		shutdown(evcon->fd, EVUTIL_SHUT_WR);
+		shutdown(evcon->fd, SHUT_WR);
 		evutil_closesocket(evcon->fd);
 		evcon->fd = -1;
 	}
@@ -1390,7 +1267,7 @@ evhttp_connection_stop_detectclose(struct evhttp_connection *evcon)
 }
 
 static void
-evhttp_connection_retry(evutil_socket_t fd, short what, void *arg)
+evhttp_connection_retry(int fd, short what, void *arg)
 {
 	struct evhttp_connection *evcon = arg;
 
@@ -1573,7 +1450,7 @@ evhttp_connection_cb(struct bufferevent *bufev, short what, void *arg)
 {
 	struct evhttp_connection *evcon = arg;
 	int error;
-	ev_socklen_t errsz = sizeof(error);
+	socklen_t errsz = sizeof(error);
 
 	if (evcon->fd == -1)
 		evcon->fd = bufferevent_getfd(bufev);
@@ -1583,10 +1460,8 @@ evhttp_connection_cb(struct bufferevent *bufev, short what, void *arg)
 		 * when connecting to a local address.  the cleanup is going
 		 * to reschedule this function call.
 		 */
-#ifndef _WIN32
 		if (errno == ECONNREFUSED)
 			goto cleanup;
-#endif
 		evhttp_error_cb(bufev, what, arg);
 		return;
 	}
@@ -1611,7 +1486,7 @@ evhttp_connection_cb(struct bufferevent *bufev, short what, void *arg)
 			EV_SOCK_FMT": %s",
 			__func__, evcon->address, evcon->port,
 			EV_SOCK_ARG(evcon->fd),
-			evutil_socket_error_to_string(error)));
+			strerror(error)));
 		goto cleanup;
 	}
 
@@ -1631,7 +1506,7 @@ evhttp_connection_cb(struct bufferevent *bufev, short what, void *arg)
 	    evhttp_error_cb,
 	    evcon);
 
-	if (!evutil_timerisset(&evcon->timeout)) {
+	if (!timerisset(&evcon->timeout)) {
 		const struct timeval read_tv = { HTTP_READ_TIMEOUT, 0 };
 		const struct timeval write_tv = { HTTP_WRITE_TIMEOUT, 0 };
 		bufferevent_set_timeouts(evcon->bufev, &read_tv, &write_tv);
@@ -2174,7 +2049,7 @@ evhttp_get_body_length(struct evhttp_request *req)
 		req->ntoread = -1;
 	} else {
 		char *endp;
-		ev_int64_t ntoread = evutil_strtoll(content_length, &endp, 10);
+		int64_t ntoread = evutil_strtoll(content_length, &endp, 10);
 		if (*content_length == '\0' || *endp != '\0' || ntoread < 0) {
 			event_debug(("%s: illegal content length: %s",
 				__func__, content_length));
@@ -2250,9 +2125,9 @@ evhttp_get_body(struct evhttp_connection *evcon, struct evhttp_request *req)
 				   now, just optimistically tell the client to
 				   send their message body. */
 				if (req->ntoread > 0) {
-					/* ntoread is ev_int64_t, max_body_size is ev_uint64_t */ 
-					if ((req->evcon->max_body_size <= EV_INT64_MAX) &&
-						(ev_uint64_t)req->ntoread > req->evcon->max_body_size) {
+					/* ntoread is int64_t, max_body_size is uint64_t */ 
+					if ((req->evcon->max_body_size <= INT64_MAX) &&
+						(uint64_t)req->ntoread > req->evcon->max_body_size) {
 						evhttp_lingering_fail(evcon, req);
 						return;
 					}
@@ -2297,7 +2172,7 @@ evhttp_read_header(struct evhttp_connection *evcon,
 		   struct evhttp_request *req)
 {
 	enum message_read_status res;
-	evutil_socket_t fd = evcon->fd;
+	int fd = evcon->fd;
 
 	res = evhttp_parse_headers_(req, bufferevent_get_input(evcon->bufev));
 	if (res == DATA_CORRUPTED || res == DATA_TOO_LONG) {
@@ -2370,14 +2245,14 @@ evhttp_read_header(struct evhttp_connection *evcon,
  */
 
 struct evhttp_connection *
-evhttp_connection_new(const char *address, ev_uint16_t port)
+evhttp_connection_new(const char *address, uint16_t port)
 {
 	return (evhttp_connection_base_new(NULL, NULL, address, port));
 }
 
 struct evhttp_connection *
 evhttp_connection_base_bufferevent_new(struct event_base *base, struct evdns_base *dnsbase, struct bufferevent* bev,
-    const char *address, ev_uint16_t port)
+    const char *address, uint16_t port)
 {
 	struct evhttp_connection *evcon = NULL;
 
@@ -2394,7 +2269,7 @@ evhttp_connection_base_bufferevent_new(struct event_base *base, struct evdns_bas
 	evcon->max_headers_size = EV_SIZE_MAX;
 	evcon->max_body_size = EV_SIZE_MAX;
 
-	evutil_timerclear(&evcon->timeout);
+	timerclear(&evcon->timeout);
 	evcon->retry_cnt = evcon->retry_max = 0;
 
 	if ((evcon->address = mm_strdup(address)) == NULL) {
@@ -2453,7 +2328,7 @@ evhttp_connection_get_server(struct evhttp_connection *evcon)
 
 struct evhttp_connection *
 evhttp_connection_base_new(struct event_base *base, struct evdns_base *dnsbase,
-    const char *address, ev_uint16_t port)
+    const char *address, uint16_t port)
 {
 	return evhttp_connection_base_bufferevent_new(base, dnsbase, NULL, address, port);
 }
@@ -2514,7 +2389,7 @@ evhttp_connection_set_timeout_tv(struct evhttp_connection *evcon,
 	} else {
 		const struct timeval read_tv = { HTTP_READ_TIMEOUT, 0 };
 		const struct timeval write_tv = { HTTP_WRITE_TIMEOUT, 0 };
-		evutil_timerclear(&evcon->timeout);
+		timerclear(&evcon->timeout);
 		bufferevent_set_timeouts(evcon->bufev, &read_tv, &write_tv);
 	}
 }
@@ -2526,7 +2401,7 @@ evhttp_connection_set_initial_retry_tv(struct evhttp_connection *evcon,
 	if (tv) {
 		evcon->initial_retry_timeout = *tv;
 	} else {
-		evutil_timerclear(&evcon->initial_retry_timeout);
+		timerclear(&evcon->initial_retry_timeout);
 		evcon->initial_retry_timeout.tv_sec = 2;
 	}
 }
@@ -2548,7 +2423,7 @@ evhttp_connection_set_closecb(struct evhttp_connection *evcon,
 
 void
 evhttp_connection_get_peer(struct evhttp_connection *evcon,
-    char **address, ev_uint16_t *port)
+    char **address, uint16_t *port)
 {
 	*address = evcon->address;
 	*port = evcon->port;
@@ -2598,7 +2473,7 @@ evhttp_connection_connect_(struct evhttp_connection *evcon)
 	    NULL /* evhttp_write_cb */,
 	    evhttp_connection_cb,
 	    evcon);
-	if (!evutil_timerisset(&evcon->timeout)) {
+	if (!timerisset(&evcon->timeout)) {
 		const struct timeval conn_tv = { HTTP_CONNECT_TIMEOUT, 0 };
 		bufferevent_set_timeouts(evcon->bufev, &conn_tv, &conn_tv);
 	} else {
@@ -3107,7 +2982,7 @@ static const char uri_chars[256] = {
  * The returned string must be freed by the caller.
  */
 char *
-evhttp_uriencode(const char *uri, ev_ssize_t len, int space_as_plus)
+evhttp_uriencode(const char *uri, ssize_t len, int space_as_plus)
 {
 	struct evbuffer *buf = evbuffer_new();
 	const char *p, *end;
@@ -3538,7 +3413,7 @@ evhttp_handle_request(struct evhttp_request *req, void *arg)
 
 /* Listener callback when a connection arrives at a server. */
 static void
-accept_socket_cb(struct evconnlistener *listener, evutil_socket_t nfd, struct sockaddr *peer_sa, int peer_socklen, void *arg)
+accept_socket_cb(struct evconnlistener *listener, int nfd, struct sockaddr *peer_sa, int peer_socklen, void *arg)
 {
 	struct evhttp *http = arg;
 
@@ -3546,7 +3421,7 @@ accept_socket_cb(struct evconnlistener *listener, evutil_socket_t nfd, struct so
 }
 
 int
-evhttp_bind_socket(struct evhttp *http, const char *address, ev_uint16_t port)
+evhttp_bind_socket(struct evhttp *http, const char *address, uint16_t port)
 {
 	struct evhttp_bound_socket *bound =
 		evhttp_bind_socket_with_handle(http, address, port);
@@ -3556,9 +3431,9 @@ evhttp_bind_socket(struct evhttp *http, const char *address, ev_uint16_t port)
 }
 
 struct evhttp_bound_socket *
-evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, ev_uint16_t port)
+evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, uint16_t port)
 {
-	evutil_socket_t fd;
+	int fd;
 	struct evhttp_bound_socket *bound;
 	int serrno;
 
@@ -3566,10 +3441,10 @@ evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, ev_uint
 		return (NULL);
 
 	if (listen(fd, 128) == -1) {
-		serrno = EVUTIL_SOCKET_ERROR();
+		serrno = errno;
 		event_sock_warn(fd, "%s: listen", __func__);
 		evutil_closesocket(fd);
-		EVUTIL_SET_SOCKET_ERROR(serrno);
+		errno = serrno;
 		return (NULL);
 	}
 
@@ -3585,7 +3460,7 @@ evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, ev_uint
 }
 
 int
-evhttp_accept_socket(struct evhttp *http, evutil_socket_t fd)
+evhttp_accept_socket(struct evhttp *http, int fd)
 {
 	struct evhttp_bound_socket *bound =
 		evhttp_accept_socket_with_handle(http, fd);
@@ -3606,7 +3481,7 @@ evhttp_foreach_bound_socket(struct evhttp *http,
 }
 
 struct evhttp_bound_socket *
-evhttp_accept_socket_with_handle(struct evhttp *http, evutil_socket_t fd)
+evhttp_accept_socket_with_handle(struct evhttp *http, int fd)
 {
 	struct evhttp_bound_socket *bound;
 	struct evconnlistener *listener;
@@ -3644,7 +3519,7 @@ evhttp_bind_listener(struct evhttp *http, struct evconnlistener *listener)
 	return bound;
 }
 
-evutil_socket_t
+int
 evhttp_bound_socket_get_fd(struct evhttp_bound_socket *bound)
 {
 	return evconnlistener_get_fd(bound->listener);
@@ -3674,7 +3549,7 @@ evhttp_new_object(void)
 		return (NULL);
 	}
 
-	evutil_timerclear(&http->timeout);
+	timerclear(&http->timeout);
 	evhttp_set_max_headers_size(http, EV_SIZE_MAX);
 	evhttp_set_max_body_size(http, EV_SIZE_MAX);
 	evhttp_set_default_content_type(http, "text/html; charset=ISO-8859-1");
@@ -3712,7 +3587,7 @@ evhttp_new(struct event_base *base)
  */
 
 struct evhttp *
-evhttp_start(const char *address, ev_uint16_t port)
+evhttp_start(const char *address, uint16_t port)
 {
 	struct evhttp *http = NULL;
 
@@ -3862,7 +3737,7 @@ evhttp_set_timeout_tv(struct evhttp* http, const struct timeval* tv)
 	if (tv) {
 		http->timeout = *tv;
 	} else {
-		evutil_timerclear(&http->timeout);
+		timerclear(&http->timeout);
 	}
 }
 
@@ -3881,7 +3756,7 @@ int evhttp_set_flags(struct evhttp *http, int flags)
 }
 
 void
-evhttp_set_max_headers_size(struct evhttp* http, ev_ssize_t max_headers_size)
+evhttp_set_max_headers_size(struct evhttp* http, ssize_t max_headers_size)
 {
 	if (max_headers_size < 0)
 		http->default_max_headers_size = EV_SIZE_MAX;
@@ -3890,10 +3765,10 @@ evhttp_set_max_headers_size(struct evhttp* http, ev_ssize_t max_headers_size)
 }
 
 void
-evhttp_set_max_body_size(struct evhttp* http, ev_ssize_t max_body_size)
+evhttp_set_max_body_size(struct evhttp* http, ssize_t max_body_size)
 {
 	if (max_body_size < 0)
-		http->default_max_body_size = EV_UINT64_MAX;
+		http->default_max_body_size = UINT64_MAX;
 	else
 		http->default_max_body_size = max_body_size;
 }
@@ -3905,7 +3780,7 @@ evhttp_set_default_content_type(struct evhttp *http,
 }
 
 void
-evhttp_set_allowed_methods(struct evhttp* http, ev_uint16_t methods)
+evhttp_set_allowed_methods(struct evhttp* http, uint16_t methods)
 {
 	http->allowed_methods = methods;
 }
@@ -4223,18 +4098,16 @@ struct evbuffer *evhttp_request_get_output_buffer(struct evhttp_request *req)
 static struct evhttp_connection*
 evhttp_get_request_connection(
 	struct evhttp* http,
-	evutil_socket_t fd, struct sockaddr *sa, ev_socklen_t salen)
+	int fd, struct sockaddr *sa, socklen_t salen)
 {
 	struct evhttp_connection *evcon;
 	char *hostname = NULL, *portname = NULL;
 	struct bufferevent* bev = NULL;
 
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_UN
 	if (sa->sa_family == AF_UNIX) {
 		struct sockaddr_un *sa_un = (struct sockaddr_un *)sa;
 		sa_un->sun_path[0] = '\0';
 	}
-#endif
 
 	name_from_addr(sa, salen, &hostname, &portname);
 	if (hostname == NULL || portname == NULL) {
@@ -4318,8 +4191,8 @@ evhttp_associate_new_request_with_connection(struct evhttp_connection *evcon)
 }
 
 static void
-evhttp_get_request(struct evhttp *http, evutil_socket_t fd,
-    struct sockaddr *sa, ev_socklen_t salen)
+evhttp_get_request(struct evhttp *http, int fd,
+    struct sockaddr *sa, socklen_t salen)
 {
 	struct evhttp_connection *evcon;
 
@@ -4332,7 +4205,7 @@ evhttp_get_request(struct evhttp *http, evutil_socket_t fd,
 	}
 
 	/* the timeout can be used by the server to close idle connections */
-	if (evutil_timerisset(&http->timeout))
+	if (timerisset(&http->timeout))
 		evhttp_connection_set_timeout_tv(evcon, &http->timeout);
 
 	/*
@@ -4353,14 +4226,13 @@ evhttp_get_request(struct evhttp *http, evutil_socket_t fd,
  */
 
 static void
-name_from_addr(struct sockaddr *sa, ev_socklen_t salen,
+name_from_addr(struct sockaddr *sa, socklen_t salen,
     char **phost, char **pport)
 {
 	char ntop[NI_MAXHOST];
 	char strport[NI_MAXSERV];
 	int ni_result;
 
-#ifdef EVENT__HAVE_GETNAMEINFO
 	ni_result = getnameinfo(sa, salen,
 		ntop, sizeof(ntop), strport, sizeof(strport),
 		NI_NUMERICHOST|NI_NUMERICSERV);
@@ -4375,30 +4247,24 @@ name_from_addr(struct sockaddr *sa, ev_socklen_t salen,
 			event_errx(1, "getnameinfo failed: %s", gai_strerror(ni_result));
 		return;
 	}
-#else
-	ni_result = fake_getnameinfo(sa, salen,
-		ntop, sizeof(ntop), strport, sizeof(strport),
-		NI_NUMERICHOST|NI_NUMERICSERV);
-	if (ni_result != 0)
-			return;
-#endif
+
 
 	*phost = mm_strdup(ntop);
 	*pport = mm_strdup(strport);
 }
 
 /* Create a non-blocking socket and bind it */
-static evutil_socket_t
-create_bind_socket_nonblock(struct evutil_addrinfo *ai, int reuse)
+static int
+create_bind_socket_nonblock(struct addrinfo *ai, int reuse)
 {
-	evutil_socket_t fd;
+	int fd;
 
 	int on = 1, r;
 	int serrno;
 
 	/* Create listen socket */
 	fd = evutil_socket_(ai ? ai->ai_family : AF_INET,
-	    SOCK_STREAM|EVUTIL_SOCK_NONBLOCK|EVUTIL_SOCK_CLOEXEC, 0);
+	    SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
 	if (fd == -1) {
 			event_sock_warn(-1, "socket");
 			return (-1);
@@ -4412,7 +4278,7 @@ create_bind_socket_nonblock(struct evutil_addrinfo *ai, int reuse)
 	}
 
 	if (ai != NULL) {
-		r = bind(fd, ai->ai_addr, (ev_socklen_t)ai->ai_addrlen);
+		r = bind(fd, ai->ai_addr, (socklen_t)ai->ai_addrlen);
 		if (r == -1)
 			goto out;
 	}
@@ -4420,18 +4286,18 @@ create_bind_socket_nonblock(struct evutil_addrinfo *ai, int reuse)
 	return (fd);
 
  out:
-	serrno = EVUTIL_SOCKET_ERROR();
+	serrno = errno;
 	evutil_closesocket(fd);
-	EVUTIL_SET_SOCKET_ERROR(serrno);
+	errno = serrno;
 	return (-1);
 }
 
-static struct evutil_addrinfo *
-make_addrinfo(const char *address, ev_uint16_t port)
+static struct addrinfo *
+make_addrinfo(const char *address, uint16_t port)
 {
-	struct evutil_addrinfo *ai = NULL;
+	struct addrinfo *ai = NULL;
 
-	struct evutil_addrinfo hints;
+	struct addrinfo hints;
 	char strport[NI_MAXSERV];
 	int ai_result;
 
@@ -4440,11 +4306,11 @@ make_addrinfo(const char *address, ev_uint16_t port)
 	hints.ai_socktype = SOCK_STREAM;
 	/* turn NULL hostname into INADDR_ANY, and skip looking up any address
 	 * types we don't have an interface to connect to. */
-	hints.ai_flags = EVUTIL_AI_PASSIVE|EVUTIL_AI_ADDRCONFIG;
+	hints.ai_flags = AI_PASSIVE|AI_ADDRCONFIG;
 	evutil_snprintf(strport, sizeof(strport), "%d", port);
 	if ((ai_result = evutil_getaddrinfo(address, strport, &hints, &ai))
 	    != 0) {
-		if (ai_result == EVUTIL_EAI_SYSTEM)
+		if (ai_result == EAI_SYSTEM)
 			event_warn("getaddrinfo");
 		else
 			event_warnx("getaddrinfo: %s",
@@ -4455,11 +4321,11 @@ make_addrinfo(const char *address, ev_uint16_t port)
 	return (ai);
 }
 
-static evutil_socket_t
-bind_socket(const char *address, ev_uint16_t port, int reuse)
+static int
+bind_socket(const char *address, uint16_t port, int reuse)
 {
-	evutil_socket_t fd;
-	struct evutil_addrinfo *aitop = NULL;
+	int fd;
+	struct addrinfo *aitop = NULL;
 
 	/* just create an unbound socket */
 	if (address == NULL && port == 0)
@@ -4613,7 +4479,7 @@ bracket_addr_ok(const char *s, const char *eos)
 	} else {
 		/* IPv6, or junk */
 		char buf[64];
-		ev_ssize_t n_chars = eos-s-2;
+		ssize_t n_chars = eos-s-2;
 		struct in6_addr in6;
 		if (n_chars >= 64) /* way too long */
 			return 0;

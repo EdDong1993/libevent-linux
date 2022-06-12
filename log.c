@@ -40,12 +40,6 @@
 #include "event2/event-config.h"
 #include "evconfig-private.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,22 +56,9 @@ static void event_exit(int errcode) EV_NORETURN;
 
 static event_fatal_cb fatal_fn = NULL;
 
-#ifdef EVENT_DEBUG_LOGGING_ENABLED
-#ifdef USE_DEBUG
-#define DEFAULT_MASK EVENT_DBG_ALL
-#else
-#define DEFAULT_MASK 0
-#endif
-
-EVENT2_EXPORT_SYMBOL ev_uint32_t event_debug_logging_mask_ = DEFAULT_MASK;
-#endif /* EVENT_DEBUG_LOGGING_ENABLED */
-
 void
-event_enable_debug_logging(ev_uint32_t which)
+event_enable_debug_logging(uint32_t which)
 {
-#ifdef EVENT_DEBUG_LOGGING_ENABLED
-	event_debug_logging_mask_ = which;
-#endif
 }
 
 void
@@ -120,25 +101,25 @@ event_warn(const char *fmt, ...)
 }
 
 void
-event_sock_err(int eval, evutil_socket_t sock, const char *fmt, ...)
+event_sock_err(int eval, int sock, const char *fmt, ...)
 {
 	va_list ap;
-	int err = evutil_socket_geterror(sock);
+	int err = errno;
 
 	va_start(ap, fmt);
-	event_logv_(EVENT_LOG_ERR, evutil_socket_error_to_string(err), fmt, ap);
+	event_logv_(EVENT_LOG_ERR, strerror(err), fmt, ap);
 	va_end(ap);
 	event_exit(eval);
 }
 
 void
-event_sock_warn(evutil_socket_t sock, const char *fmt, ...)
+event_sock_warn(int sock, const char *fmt, ...)
 {
 	va_list ap;
-	int err = evutil_socket_geterror(sock);
+	int err = errno;
 
 	va_start(ap, fmt);
-	event_logv_(EVENT_LOG_WARN, evutil_socket_error_to_string(err), fmt, ap);
+	event_logv_(EVENT_LOG_WARN, strerror(err), fmt, ap);
 	va_end(ap);
 }
 
@@ -189,7 +170,7 @@ event_logv_(int severity, const char *errstr, const char *fmt, va_list ap)
 	char buf[1024];
 	size_t len;
 
-	if (severity == EVENT_LOG_DEBUG && !event_debug_get_logging_mask_())
+	if (severity == EVENT_LOG_DEBUG)
 		return;
 
 	if (fmt != NULL)

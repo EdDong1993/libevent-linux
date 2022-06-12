@@ -40,16 +40,7 @@ extern "C" {
 #include "ratelim-internal.h"
 #include "event2/bufferevent_struct.h"
 
-#include "ipv6-internal.h"
-#ifdef _WIN32
-#include <ws2tcpip.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
 
 /* These flags are reasons that we might be declining to actually enable
    reading or writing on a bufferevent.
@@ -74,7 +65,7 @@ extern "C" {
  * (underlying) bufferevent because it has stopped reading from it. */
 #define BEV_SUSPEND_FILT_READ 0x10
 
-typedef ev_uint16_t bufferevent_suspend_flags;
+typedef uint16_t bufferevent_suspend_flags;
 
 struct bufferevent_rate_limit_group {
 	/** List of all members in the group */
@@ -101,8 +92,8 @@ struct bufferevent_rate_limit_group {
 	/*@{*/
 	/** Total number of bytes read or written in this group since last
 	 * reset. */
-	ev_uint64_t total_read;
-	ev_uint64_t total_written;
+	uint64_t total_read;
+	uint64_t total_written;
 	/*@}*/
 
 	/** The number of bufferevents in the group. */
@@ -110,8 +101,8 @@ struct bufferevent_rate_limit_group {
 
 	/** The smallest number of bytes that any member of the group should
 	 * be limited to read or write at a time. */
-	ev_ssize_t min_share;
-	ev_ssize_t configured_min_share;
+	ssize_t min_share;
+	ssize_t configured_min_share;
 
 	/** Timeout event that goes off once a tick, when the bucket is ready
 	 * to refill. */
@@ -208,11 +199,11 @@ struct bufferevent_private {
 
 	/** No matter how big our bucket gets, don't try to read more than this
 	 * much in a single read operation. */
-	ev_ssize_t max_single_read;
+	ssize_t max_single_read;
 
 	/** No matter how big our bucket gets, don't try to write more than this
 	 * much in a single write operation. */
-	ev_ssize_t max_single_write;
+	ssize_t max_single_write;
 
 	/** Rate-limiting information for this bufferevent */
 	struct bufferevent_rate_limit *rate_limiting;
@@ -243,7 +234,7 @@ enum bufferevent_ctrl_op {
 /** Possible data types for a control callback */
 union bufferevent_ctrl_data {
 	void *ptr;
-	evutil_socket_t fd;
+	int fd;
 };
 
 /**
@@ -305,20 +296,6 @@ extern const struct bufferevent_ops bufferevent_ops_pair;
 #define BEV_IS_SOCKET(bevp) ((bevp)->be_ops == &bufferevent_ops_socket)
 #define BEV_IS_FILTER(bevp) ((bevp)->be_ops == &bufferevent_ops_filter)
 #define BEV_IS_PAIR(bevp) ((bevp)->be_ops == &bufferevent_ops_pair)
-
-#if defined(EVENT__HAVE_OPENSSL)
-extern const struct bufferevent_ops bufferevent_ops_openssl;
-#define BEV_IS_OPENSSL(bevp) ((bevp)->be_ops == &bufferevent_ops_openssl)
-#else
-#define BEV_IS_OPENSSL(bevp) 0
-#endif
-
-#ifdef _WIN32
-extern const struct bufferevent_ops bufferevent_ops_async;
-#define BEV_IS_ASYNC(bevp) ((bevp)->be_ops == &bufferevent_ops_async)
-#else
-#define BEV_IS_ASYNC(bevp) 0
-#endif
 
 /** Initialize the shared parts of a bufferevent. */
 EVENT2_EXPORT_SYMBOL
@@ -446,7 +423,7 @@ bufferevent_socket_get_conn_address_(struct bufferevent *bev);
 
 EVENT2_EXPORT_SYMBOL
 void
-bufferevent_socket_set_conn_address_fd_(struct bufferevent *bev, evutil_socket_t fd);
+bufferevent_socket_set_conn_address_fd_(struct bufferevent *bev, int fd);
 
 EVENT2_EXPORT_SYMBOL
 void
@@ -457,14 +434,14 @@ bufferevent_socket_set_conn_address_(struct bufferevent *bev, struct sockaddr *a
  * reset the read timeout (if any). */
 #define BEV_RESET_GENERIC_READ_TIMEOUT(bev)				\
 	do {								\
-		if (evutil_timerisset(&(bev)->timeout_read))		\
+		if (timerisset(&(bev)->timeout_read))		\
 			event_add(&(bev)->ev_read, &(bev)->timeout_read); \
 	} while (0)
 /** Internal use: We have just successfully written data from an inbuf, so
  * reset the read timeout (if any). */
 #define BEV_RESET_GENERIC_WRITE_TIMEOUT(bev)				\
 	do {								\
-		if (evutil_timerisset(&(bev)->timeout_write))		\
+		if (timerisset(&(bev)->timeout_write))		\
 			event_add(&(bev)->ev_write, &(bev)->timeout_write); \
 	} while (0)
 #define BEV_DEL_GENERIC_READ_TIMEOUT(bev)	\
@@ -499,14 +476,14 @@ bufferevent_socket_set_conn_address_(struct bufferevent *bev, struct sockaddr *a
 
 EVENT2_EXPORT_SYMBOL
 int bufferevent_decrement_write_buckets_(struct bufferevent_private *bev,
-    ev_ssize_t bytes);
+    ssize_t bytes);
 EVENT2_EXPORT_SYMBOL
 int bufferevent_decrement_read_buckets_(struct bufferevent_private *bev,
-    ev_ssize_t bytes);
+    ssize_t bytes);
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_read_max_(struct bufferevent_private *bev);
+ssize_t bufferevent_get_read_max_(struct bufferevent_private *bev);
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_write_max_(struct bufferevent_private *bev);
+ssize_t bufferevent_get_write_max_(struct bufferevent_private *bev);
 
 int bufferevent_ratelim_init_(struct bufferevent_private *bev);
 

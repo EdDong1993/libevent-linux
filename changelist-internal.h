@@ -52,7 +52,7 @@
 /** Represents a */
 struct event_change {
 	/** The fd or signal whose events are to be changed */
-	evutil_socket_t fd;
+	int fd;
 	/* The events that were enabled on the fd before any of these changes
 	   were made.  May include EV_READ or EV_WRITE. */
 	short old_events;
@@ -60,9 +60,9 @@ struct event_change {
 	/* The changes that we want to make in reading and writing on this fd.
 	 * If this is a signal, then read_change has EV_CHANGE_SIGNAL set,
 	 * and write_change is unused. */
-	ev_uint8_t read_change;
-	ev_uint8_t write_change;
-	ev_uint8_t close_change;
+	uint8_t read_change;
+	uint8_t write_change;
+	uint8_t close_change;
 };
 
 /* Flags for read_change and write_change. */
@@ -93,10 +93,10 @@ void event_changelist_remove_all_(struct event_changelist *changelist,
 void event_changelist_freemem_(struct event_changelist *changelist);
 
 /** Implementation of eventop_add that queues the event in a changelist. */
-int event_changelist_add_(struct event_base *base, evutil_socket_t fd, short old, short events,
+int event_changelist_add_(struct event_base *base, int fd, short old, short events,
     void *p);
 /** Implementation of eventop_del that queues the event in a changelist. */
-int event_changelist_del_(struct event_base *base, evutil_socket_t fd, short old, short events,
+int event_changelist_del_(struct event_base *base, int fd, short old, short events,
     void *p);
 
 #endif

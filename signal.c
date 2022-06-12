@@ -29,31 +29,17 @@
 #include "event2/event-config.h"
 #include "evconfig-private.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
 #include <sys/types.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <errno.h>
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
 
 #include "event2/event.h"
 #include "event2/event_struct.h"
@@ -82,16 +68,8 @@
   on Linux do a reasonable thing using signalfd.
 */
 
-#ifndef _WIN32
-/* Windows wants us to call our signal handlers as __cdecl.  Nobody else
- * expects you to do anything crazy like this. */
-#ifndef __cdecl
-#define __cdecl
-#endif
-#endif
-
-static int evsig_add(struct event_base *, evutil_socket_t, short, short, void *);
-static int evsig_del(struct event_base *, evutil_socket_t, short, short, void *);
+static int evsig_add(struct event_base *, int, short, short, void *);
+static int evsig_del(struct event_base *, int, short, short, void *);
 
 static const struct eventop evsigops = {
 	"signal",
@@ -111,9 +89,9 @@ static void *evsig_base_lock = NULL;
 static struct event_base *evsig_base = NULL;
 /* A copy of evsig_base->sigev_n_signals_added. */
 static int evsig_base_n_signals_added = 0;
-static evutil_socket_t evsig_base_fd = -1;
+static int evsig_base_fd = -1;
 
-static void __cdecl evsig_handler(int sig);
+static void evsig_handler(int sig);
 
 #define EVSIGBASE_LOCK() EVLOCK_LOCK(evsig_base_lock, 0)
 #define EVSIGBASE_UNLOCK() EVLOCK_UNLOCK(evsig_base_lock, 0)
@@ -130,10 +108,10 @@ evsig_set_base_(struct event_base *base)
 
 /* Callback for when the signal handler write a byte to our signaling socket */
 static void
-evsig_cb(evutil_socket_t fd, short what, void *arg)
+evsig_cb(int fd, short what, void *arg)
 {
 	static char signals[1024];
-	ev_ssize_t n;
+	ssize_t n;
 	int i;
 	int ncaught[NSIG];
 	struct event_base *base;
@@ -143,13 +121,9 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 	memset(&ncaught, 0, sizeof(ncaught));
 
 	while (1) {
-#ifdef _WIN32
-		n = recv(fd, signals, sizeof(signals), 0);
-#else
 		n = read(fd, signals, sizeof(signals));
-#endif
 		if (n == -1) {
-			int err = evutil_socket_geterror(fd);
+			int err = errno;
 			if (! EVUTIL_ERR_RW_RETRIABLE(err))
 				event_sock_err(1, fd, "%s: recv", __func__);
 			break;
@@ -158,7 +132,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 			break;
 		}
 		for (i = 0; i < n; ++i) {
-			ev_uint8_t sig = signals[i];
+			uint8_t sig = signals[i];
 			if (sig < NSIG)
 				ncaught[sig]++;
 		}
@@ -181,13 +155,7 @@ evsig_init_(struct event_base *base)
 	 * signals that got delivered.
 	 */
 	if (evutil_make_internal_pipe_(base->sig.ev_signal_pair) == -1) {
-#ifdef _WIN32
-		/* Make this nonfatal on win32, where sometimes people
-		   have localhost firewalled. */
-		event_sock_warn(-1, "%s: socketpair", __func__);
-#else
 		event_sock_err(1, -1, "%s: socketpair", __func__);
-#endif
 		return -1;
 	}
 
@@ -212,13 +180,9 @@ evsig_init_(struct event_base *base)
  * we can restore the original handler when we clear the current one. */
 int
 evsig_set_handler_(struct event_base *base,
-    int evsignal, void (__cdecl *handler)(int))
+    int evsignal, void (*handler)(int))
 {
-#ifdef EVENT__HAVE_SIGACTION
 	struct sigaction sa;
-#else
-	ev_sighandler_t sh;
-#endif
 	struct evsig_info *sig = &base->sig;
 	void *p;
 
@@ -251,7 +215,6 @@ evsig_set_handler_(struct event_base *base,
 	}
 
 	/* save previous handler and setup new handler */
-#ifdef EVENT__HAVE_SIGACTION
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = handler;
 	sa.sa_flags |= SA_RESTART;
@@ -263,21 +226,13 @@ evsig_set_handler_(struct event_base *base,
 		sig->sh_old[evsignal] = NULL;
 		return (-1);
 	}
-#else
-	if ((sh = signal(evsignal, handler)) == SIG_ERR) {
-		event_warn("signal");
-		mm_free(sig->sh_old[evsignal]);
-		sig->sh_old[evsignal] = NULL;
-		return (-1);
-	}
-	*sig->sh_old[evsignal] = sh;
-#endif
+
 
 	return (0);
 }
 
 static int
-evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short events, void *p)
+evsig_add(struct event_base *base, int evsignal, short old, short events, void *p)
 {
 	struct evsig_info *sig = &base->sig;
 	(void)p;
@@ -327,11 +282,7 @@ evsig_restore_handler_(struct event_base *base, int evsignal)
 {
 	int ret = 0;
 	struct evsig_info *sig = &base->sig;
-#ifdef EVENT__HAVE_SIGACTION
 	struct sigaction *sh;
-#else
-	ev_sighandler_t *sh;
-#endif
 
 	if (evsignal >= sig->sh_old_max) {
 		/* Can't actually restore. */
@@ -342,17 +293,10 @@ evsig_restore_handler_(struct event_base *base, int evsignal)
 	/* restore previous handler */
 	sh = sig->sh_old[evsignal];
 	sig->sh_old[evsignal] = NULL;
-#ifdef EVENT__HAVE_SIGACTION
 	if (sigaction(evsignal, sh, NULL) == -1) {
 		event_warn("sigaction");
 		ret = -1;
 	}
-#else
-	if (signal(evsignal, *sh) == SIG_ERR) {
-		event_warn("signal");
-		ret = -1;
-	}
-#endif
 
 	mm_free(sh);
 
@@ -360,7 +304,7 @@ evsig_restore_handler_(struct event_base *base, int evsignal)
 }
 
 static int
-evsig_del(struct event_base *base, evutil_socket_t evsignal, short old, short events, void *p)
+evsig_del(struct event_base *base, int evsignal, short old, short events, void *p)
 {
 	EVUTIL_ASSERT(evsignal >= 0 && evsignal < NSIG);
 
@@ -375,14 +319,11 @@ evsig_del(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 	return (evsig_restore_handler_(base, (int)evsignal));
 }
 
-static void __cdecl
+static void
 evsig_handler(int sig)
 {
 	int save_errno = errno;
-#ifdef _WIN32
-	int socket_errno = EVUTIL_SOCKET_ERROR();
-#endif
-	ev_uint8_t msg;
+	uint8_t msg;
 
 	if (evsig_base == NULL) {
 		event_warnx(
@@ -391,24 +332,13 @@ evsig_handler(int sig)
 		return;
 	}
 
-#ifndef EVENT__HAVE_SIGACTION
-	signal(sig, evsig_handler);
-#endif
-
 	/* Wake up our notification mechanism */
 	msg = sig;
-#ifdef _WIN32
-	send(evsig_base_fd, (char*)&msg, 1, 0);
-#else
 	{
 		int r = write(evsig_base_fd, (char*)&msg, 1);
 		(void)r; /* Suppress 'unused return value' and 'unused var' */
 	}
-#endif
 	errno = save_errno;
-#ifdef _WIN32
-	EVUTIL_SET_SOCKET_ERROR(socket_errno);
-#endif
 }
 
 void

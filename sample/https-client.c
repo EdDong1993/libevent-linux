@@ -20,17 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#define snprintf _snprintf
-#define strcasecmp _stricmp 
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
-#endif
 
 #include <event2/bufferevent_ssl.h>
 #include <event2/bufferevent.h>
@@ -60,7 +51,7 @@ http_request_done(struct evhttp_request *req, void *ctx)
 		struct bufferevent *bev = (struct bufferevent *) ctx;
 		unsigned long oslerr;
 		int printed_err = 0;
-		int errcode = EVUTIL_SOCKET_ERROR();
+		int errcode = errno;
 		fprintf(stderr, "some request failed - no idea which one though!\n");
 		/* Print out the OpenSSL error queue that libevent
 		 * squirreled away for us, if any. */
@@ -73,7 +64,7 @@ http_request_done(struct evhttp_request *req, void *ctx)
 		 * socket error; let's try printing that. */
 		if (! printed_err)
 			fprintf(stderr, "socket error = %s (%d)\n",
-				evutil_socket_error_to_string(errcode),
+				strerror(errcode),
 				errcode);
 		return;
 	}
@@ -181,36 +172,6 @@ static int cert_verify_callback(X509_STORE_CTX *x509_ctx, void *arg)
 	}
 }
 
-#ifdef _WIN32
-static int
-add_cert_for_store(X509_STORE *store, const char *name)
-{
-	HCERTSTORE sys_store = NULL;
-	PCCERT_CONTEXT ctx = NULL;
-	int r = 0;
-
-	sys_store = CertOpenSystemStore(0, name);
-	if (!sys_store) {
-		err("failed to open system certificate store");
-		return -1;
-	}
-	while ((ctx = CertEnumCertificatesInStore(sys_store, ctx))) {
-		X509 *x509 = d2i_X509(NULL, (unsigned char const **)&ctx->pbCertEncoded,
-			ctx->cbCertEncoded);
-		if (x509) {
-			X509_STORE_add_cert(store, x509);
-			X509_free(x509);
-		} else {
-			r = -1;
-			err_openssl("d2i_X509");
-			break;
-		}
-	}
-	CertCloseStore(sys_store, 0);
-	return r;
-}
-#endif
-
 int
 main(int argc, char **argv)
 {
@@ -286,22 +247,6 @@ main(int argc, char **argv)
 		goto error;
 	}
 
-#ifdef _WIN32
-	{
-		WORD wVersionRequested;
-		WSADATA wsaData;
-		int err;
-
-		wVersionRequested = MAKEWORD(2, 2);
-
-		err = WSAStartup(wVersionRequested, &wsaData);
-		if (err != 0) {
-			printf("WSAStartup failed with error: %d\n", err);
-			goto error;
-		}
-	}
-#endif // _WIN32
-
 	http_uri = evhttp_uri_parse(url);
 	if (http_uri == NULL) {
 		err("malformed url");
@@ -367,18 +312,10 @@ main(int argc, char **argv)
 		X509_STORE *store;
 		/* Attempt to use the system's trusted root certificates. */
 		store = SSL_CTX_get_cert_store(ssl_ctx);
-#ifdef _WIN32
-		if (add_cert_for_store(store, "CA") < 0 ||
-		    add_cert_for_store(store, "AuthRoot") < 0 ||
-		    add_cert_for_store(store, "ROOT") < 0) {
-			goto error;
-		}
-#else // _WIN32
 		if (X509_STORE_set_default_paths(store) != 1) {
 			err_openssl("X509_STORE_set_default_paths");
 			goto error;
 		}
-#endif // _WIN32
 	} else {
 		if (SSL_CTX_load_verify_locations(ssl_ctx, crt, NULL) != 1) {
 			err_openssl("SSL_CTX_load_verify_locations");
@@ -535,10 +472,6 @@ cleanup:
 	sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
 #endif /* (OPENSSL_VERSION_NUMBER < 0x10100000L) || \
 	(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L) */
-
-#ifdef _WIN32
-	WSACleanup();
-#endif
 
 	return ret;
 }

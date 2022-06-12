@@ -81,12 +81,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 /* For int types. */
 #include <event2/util.h>
@@ -187,7 +183,7 @@ enum bufferevent_options {
   @see bufferevent_free()
   */
 EVENT2_EXPORT_SYMBOL
-struct bufferevent *bufferevent_socket_new(struct event_base *base, evutil_socket_t fd, int options);
+struct bufferevent *bufferevent_socket_new(struct event_base *base, int fd, int options);
 
 /**
    Launch a connect() attempt with a socket-based bufferevent.
@@ -353,14 +349,14 @@ void bufferevent_getcb(struct bufferevent *bufev,
   @param fd the file descriptor to operate on
 */
 EVENT2_EXPORT_SYMBOL
-int bufferevent_setfd(struct bufferevent *bufev, evutil_socket_t fd);
+int bufferevent_setfd(struct bufferevent *bufev, int fd);
 
 /**
    Returns the file descriptor associated with a bufferevent, or -1 if
    no file descriptor is associated with the bufferevent.
  */
 EVENT2_EXPORT_SYMBOL
-evutil_socket_t bufferevent_getfd(struct bufferevent *bufev);
+int bufferevent_getfd(struct bufferevent *bufev);
 
 /**
    Returns the underlying bufferevent associated with a bufferevent (if
@@ -701,7 +697,7 @@ enum bufferevent_filter_result {
        on an error.
  */
 typedef enum bufferevent_filter_result (*bufferevent_filter_cb)(
-    struct evbuffer *src, struct evbuffer *dst, ev_ssize_t dst_limit,
+    struct evbuffer *src, struct evbuffer *dst, ssize_t dst_limit,
     enum bufferevent_flush_mode mode, void *ctx);
 
 /**
@@ -906,11 +902,11 @@ int bufferevent_set_max_single_write(struct bufferevent *bev, size_t size);
 
 /** Get the current size limit for single read operation. */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_max_single_read(struct bufferevent *bev);
+ssize_t bufferevent_get_max_single_read(struct bufferevent *bev);
 
 /** Get the current size limit for single write operation. */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_max_single_write(struct bufferevent *bev);
+ssize_t bufferevent_get_max_single_write(struct bufferevent *bev);
 
 /**
    @name Rate limit inspection
@@ -924,15 +920,15 @@ ev_ssize_t bufferevent_get_max_single_write(struct bufferevent *bev);
    @{
  */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_read_limit(struct bufferevent *bev);
+ssize_t bufferevent_get_read_limit(struct bufferevent *bev);
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_write_limit(struct bufferevent *bev);
+ssize_t bufferevent_get_write_limit(struct bufferevent *bev);
 /*@}*/
 
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_max_to_read(struct bufferevent *bev);
+ssize_t bufferevent_get_max_to_read(struct bufferevent *bev);
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_get_max_to_write(struct bufferevent *bev);
+ssize_t bufferevent_get_max_to_write(struct bufferevent *bev);
 
 EVENT2_EXPORT_SYMBOL
 const struct ev_token_bucket_cfg *bufferevent_get_token_bucket_cfg(const struct bufferevent * bev);
@@ -947,10 +943,10 @@ const struct ev_token_bucket_cfg *bufferevent_get_token_bucket_cfg(const struct 
    @{
  */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_rate_limit_group_get_read_limit(
+ssize_t bufferevent_rate_limit_group_get_read_limit(
 	struct bufferevent_rate_limit_group *);
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t bufferevent_rate_limit_group_get_write_limit(
+ssize_t bufferevent_rate_limit_group_get_write_limit(
 	struct bufferevent_rate_limit_group *);
 /*@}*/
 
@@ -969,9 +965,9 @@ ev_ssize_t bufferevent_rate_limit_group_get_write_limit(
    @{
  */
 EVENT2_EXPORT_SYMBOL
-int bufferevent_decrement_read_limit(struct bufferevent *bev, ev_ssize_t decr);
+int bufferevent_decrement_read_limit(struct bufferevent *bev, ssize_t decr);
 EVENT2_EXPORT_SYMBOL
-int bufferevent_decrement_write_limit(struct bufferevent *bev, ev_ssize_t decr);
+int bufferevent_decrement_write_limit(struct bufferevent *bev, ssize_t decr);
 /*@}*/
 
 /**
@@ -989,10 +985,10 @@ int bufferevent_decrement_write_limit(struct bufferevent *bev, ev_ssize_t decr);
  */
 EVENT2_EXPORT_SYMBOL
 int bufferevent_rate_limit_group_decrement_read(
-	struct bufferevent_rate_limit_group *, ev_ssize_t);
+	struct bufferevent_rate_limit_group *, ssize_t);
 EVENT2_EXPORT_SYMBOL
 int bufferevent_rate_limit_group_decrement_write(
-	struct bufferevent_rate_limit_group *, ev_ssize_t);
+	struct bufferevent_rate_limit_group *, ssize_t);
 /*@}*/
 
 
@@ -1005,7 +1001,7 @@ int bufferevent_rate_limit_group_decrement_write(
 EVENT2_EXPORT_SYMBOL
 void bufferevent_rate_limit_group_get_totals(
     struct bufferevent_rate_limit_group *grp,
-    ev_uint64_t *total_read_out, ev_uint64_t *total_written_out);
+    uint64_t *total_read_out, uint64_t *total_written_out);
 
 /**
  * Reset the total bytes read/written on a group.

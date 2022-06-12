@@ -39,12 +39,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 /* For int types. */
 #include <event2/util.h>
@@ -83,7 +79,7 @@ struct {
 
 	/* address of the remote host and the port connection came from */
 	char *remote_host;
-	ev_uint16_t remote_port;
+	uint16_t remote_port;
 
 	/* cache of the hostname for evhttp_request_get_host */
 	char *host_cache;
@@ -104,7 +100,7 @@ struct {
 	char *response_code_line;	/* Readable response */
 
 	struct evbuffer *input_buffer;	/* read data */
-	ev_int64_t ntoread;
+	int64_t ntoread;
 	unsigned chunked:1,		/* a chunked request */
 	    userdone:1;			/* the user has sent all data */
 

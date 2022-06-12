@@ -100,9 +100,9 @@ struct eventop {
 	 * fdinfo field below.  It will be set to 0 the first time the fd is
 	 * added.  The function should return 0 on success and -1 on error.
 	 */
-	int (*add)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo);
+	int (*add)(struct event_base *, int fd, short old, short events, void *fdinfo);
 	/** As "add", except 'events' contains the events we mean to disable. */
-	int (*del)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo);
+	int (*del)(struct event_base *, int fd, short old, short events, void *fdinfo);
 	/** Function to implement the core of an event loop.  It must see which
 	    added events are ready, and cause event_active to be called for each
 	    active event (usually via event_io_active or such).  It should
@@ -125,27 +125,8 @@ struct eventop {
 	size_t fdinfo_len;
 };
 
-#ifdef _WIN32
-/* If we're on win32, then file descriptors are not nice low densely packed
-   integers.  Instead, they are pointer-like windows handles, and we want to
-   use a hashtable instead of an array to map fds to events.
-*/
-#define EVMAP_USE_HT
-#endif
-
-/* #define HT_CACHE_HASH_VALS */
-
-#ifdef EVMAP_USE_HT
-#define HT_NO_CACHE_HASH_VALUES
-#include "ht-internal.h"
-struct event_map_entry;
-HT_HEAD(event_io_map, event_map_entry);
-#else
-#define event_io_map event_signal_map
-#endif
-
 /* Used to map signal numbers to a list of events.  If EVMAP_USE_HT is not
-   defined, this structure is also used as event_io_map, which maps fds to a
+   defined, this structure is also used as event_signal_map, which maps fds to a
    list of events.
 */
 struct event_signal_map {
@@ -186,14 +167,6 @@ struct event_changelist {
 	int changes_size;
 };
 
-#ifndef EVENT__DISABLE_DEBUG_MODE
-/* Global internal flag: set to one if debug mode is on. */
-extern int event_debug_mode_on_;
-#define EVENT_DEBUG_MODE_IS_ON() (event_debug_mode_on_)
-#else
-#define EVENT_DEBUG_MODE_IS_ON() (0)
-#endif
-
 TAILQ_HEAD(evcallback_list, event_callback);
 
 /* Sets up an event for processing once */
@@ -201,7 +174,7 @@ struct event_once {
 	LIST_ENTRY(event_once) next_once;
 	struct event ev;
 
-	void (*cb)(evutil_socket_t, short, void *);
+	void (*cb)(int, short, void *);
 	void *arg;
 };
 
@@ -279,7 +252,7 @@ struct event_base {
 	int n_common_timeouts_allocated;
 
 	/** Mapping from file descriptors to enabled (added) events */
-	struct event_io_map io;
+	struct event_signal_map io;
 
 	/** Mapping from signal numbers to enabled (added) events. */
 	struct event_signal_map sigmap;
@@ -314,11 +287,6 @@ struct event_base {
 	/** The event whose callback is executing right now */
 	struct event_callback *current_event;
 
-#ifdef _WIN32
-	/** IOCP support structure, if IOCP is enabled. */
-	struct event_iocp_port *iocp;
-#endif
-
 	/** Flags that this base was configured with */
 	enum event_base_config_flag flags;
 
@@ -332,7 +300,7 @@ struct event_base {
 	int is_notify_pending;
 	/** A socketpair used by some th_notify functions to wake up the main
 	 * thread. */
-	evutil_socket_t th_notify_fd[2];
+	int th_notify_fd[2];
 	/** An event used by some th_notify functions to wake up the main
 	 * thread. */
 	struct event th_notify;
@@ -383,23 +351,22 @@ struct event_config {
 #endif
 
 #ifndef TAILQ_FOREACH
-#define TAILQ_FOREACH(var, head, field)					\
-	for ((var) = TAILQ_FIRST(head);					\
-	     (var) != TAILQ_END(head);					\
-	     (var) = TAILQ_NEXT(var, field))
+#define TAILQ_FOREACH(var, head, field)                       \
+	for ((var) = TAILQ_FIRST(head); (var) != TAILQ_END(head); \
+		 (var) = TAILQ_NEXT(var, field))
 #endif
 
 #ifndef TAILQ_INSERT_BEFORE
-#define	TAILQ_INSERT_BEFORE(listelm, elm, field) do {			\
-	(elm)->field.tqe_prev = (listelm)->field.tqe_prev;		\
-	(elm)->field.tqe_next = (listelm);				\
-	*(listelm)->field.tqe_prev = (elm);				\
-	(listelm)->field.tqe_prev = &(elm)->field.tqe_next;		\
-} while (0)
+#define TAILQ_INSERT_BEFORE(listelm, elm, field)            \
+	do {                                                    \
+		(elm)->field.tqe_prev = (listelm)->field.tqe_prev;  \
+		(elm)->field.tqe_next = (listelm);                  \
+		*(listelm)->field.tqe_prev = (elm);                 \
+		(listelm)->field.tqe_prev = &(elm)->field.tqe_next; \
+	} while (0)
 #endif
 
-#define N_ACTIVE_CALLBACKS(base)					\
-	((base)->event_count_active)
+#define N_ACTIVE_CALLBACKS(base) ((base)->event_count_active)
 
 int evsig_set_handler_(struct event_base *base, int evsignal,
 			  void (*fn)(int));

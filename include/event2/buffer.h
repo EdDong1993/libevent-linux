@@ -80,12 +80,8 @@ extern "C" {
 
 #include <event2/event-config.h>
 #include <stdarg.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_UIO_H
 #include <sys/uio.h>
-#endif
 #include <event2/util.h>
 
 /**
@@ -94,11 +90,7 @@ extern "C" {
 
    @see event2/event.h for more information
 */
-struct evbuffer
-#ifdef EVENT_IN_DOXYGEN_
-{}
-#endif
-;
+struct evbuffer;
 
 /**
     Pointer to a position within an evbuffer.
@@ -114,7 +106,7 @@ struct evbuffer
     @see evbuffer_ptr_set()
  */
 struct evbuffer_ptr {
-	ev_ssize_t pos;
+	ssize_t pos;
 
 	/* Do not alter or rely on the values of fields: they are for internal
 	 * use */
@@ -123,24 +115,6 @@ struct evbuffer_ptr {
 		size_t pos_in_chain;
 	} internal_;
 };
-
-/** Describes a single extent of memory inside an evbuffer.  Used for
-    direct-access functions.
-
-    @see evbuffer_reserve_space, evbuffer_commit_space, evbuffer_peek
- */
-#ifdef EVENT__HAVE_SYS_UIO_H
-#define evbuffer_iovec iovec
-/* Internal use -- defined only if we are using the native struct iovec */
-#define EVBUFFER_IOVEC_IS_NATIVE_
-#else
-struct evbuffer_iovec {
-	/** The start of the extent of memory. */
-	void *iov_base;
-	/** The length of the extent of memory. */
-	size_t iov_len;
-};
-#endif
 
 /**
   Allocate storage for a new evbuffer.
@@ -213,7 +187,7 @@ void evbuffer_unlock(struct evbuffer *buf);
  * @return 0 on success, -1 on failure.
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_set_flags(struct evbuffer *buf, ev_uint64_t flags);
+int evbuffer_set_flags(struct evbuffer *buf, uint64_t flags);
 /** Change the flags that are set for an evbuffer by removing some.
  *
  * @param buffer the evbuffer that the callback is watching.
@@ -222,7 +196,7 @@ int evbuffer_set_flags(struct evbuffer *buf, ev_uint64_t flags);
  * @return 0 on success, -1 on failure.
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_clear_flags(struct evbuffer *buf, ev_uint64_t flags);
+int evbuffer_clear_flags(struct evbuffer *buf, uint64_t flags);
 
 /**
   Returns the total number of bytes stored in the evbuffer
@@ -287,7 +261,7 @@ int evbuffer_expand(struct evbuffer *buf, size_t datlen);
    @param size how much space to make available, at minimum.  The
       total length of the extents may be greater than the requested
       length.
-   @param vec an array of one or more evbuffer_iovec structures to
+   @param vec an array of one or more iovec structures to
       hold pointers to the reserved extents of memory.
    @param n_vec The length of the vec array.  Must be at least 1;
        2 is more efficient.
@@ -296,8 +270,8 @@ int evbuffer_expand(struct evbuffer *buf, size_t datlen);
 */
 EVENT2_EXPORT_SYMBOL
 int
-evbuffer_reserve_space(struct evbuffer *buf, ev_ssize_t size,
-    struct evbuffer_iovec *vec, int n_vec);
+evbuffer_reserve_space(struct evbuffer *buf, ssize_t size,
+    struct iovec *vec, int n_vec);
 
 /**
    Commits previously reserved space.
@@ -322,7 +296,7 @@ evbuffer_reserve_space(struct evbuffer *buf, ev_ssize_t size,
 */
 EVENT2_EXPORT_SYMBOL
 int evbuffer_commit_space(struct evbuffer *buf,
-    struct evbuffer_iovec *vec, int n_vecs);
+    struct iovec *vec, int n_vecs);
 
 /**
   Append data to the end of an evbuffer.
@@ -362,7 +336,7 @@ int evbuffer_remove(struct evbuffer *buf, void *data, size_t datlen);
   @return the number of bytes read, or -1 if we can't drain the buffer.
  */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t evbuffer_copyout(struct evbuffer *buf, void *data_out, size_t datlen);
+ssize_t evbuffer_copyout(struct evbuffer *buf, void *data_out, size_t datlen);
 
 /**
   Read data from the middle of an evbuffer, and leave the buffer unchanged.
@@ -377,7 +351,7 @@ ev_ssize_t evbuffer_copyout(struct evbuffer *buf, void *data_out, size_t datlen)
   @return the number of bytes read, or -1 if we can't drain the buffer.
  */
 EVENT2_EXPORT_SYMBOL
-ev_ssize_t evbuffer_copyout_from(struct evbuffer *buf, const struct evbuffer_ptr *pos, void *data_out, size_t datlen);
+ssize_t evbuffer_copyout_from(struct evbuffer *buf, const struct evbuffer_ptr *pos, void *data_out, size_t datlen);
 
 /**
   Read data from an evbuffer into another evbuffer, draining
@@ -524,8 +498,8 @@ int evbuffer_add_reference(struct evbuffer *outbuf,
 */
 
 EVENT2_EXPORT_SYMBOL
-int evbuffer_add_file(struct evbuffer *outbuf, int fd, ev_off_t offset,
-    ev_off_t length);
+int evbuffer_add_file(struct evbuffer *outbuf, int fd, off_t offset,
+    off_t length);
 
 /**
   An evbuffer_file_segment holds a reference to a range of a file --
@@ -597,7 +571,7 @@ typedef void (*evbuffer_file_segment_cleanup_cb)(
  **/
 EVENT2_EXPORT_SYMBOL
 struct evbuffer_file_segment *evbuffer_file_segment_new(
-	int fd, ev_off_t offset, ev_off_t length, unsigned flags);
+	int fd, off_t offset, off_t length, unsigned flags);
 
 /**
    Free an evbuffer_file_segment
@@ -644,7 +618,7 @@ void evbuffer_file_segment_add_cleanup_cb(struct evbuffer_file_segment *seg,
  */
 EVENT2_EXPORT_SYMBOL
 int evbuffer_add_file_segment(struct evbuffer *buf,
-    struct evbuffer_file_segment *seg, ev_off_t offset, ev_off_t length);
+    struct evbuffer_file_segment *seg, off_t offset, off_t length);
 
 /**
   Append a formatted string to the end of an evbuffer.
@@ -703,7 +677,7 @@ int evbuffer_drain(struct evbuffer *buf, size_t len);
   @see evbuffer_read()
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_write(struct evbuffer *buffer, evutil_socket_t fd);
+int evbuffer_write(struct evbuffer *buffer, int fd);
 
 /**
   Write some of the contents of an evbuffer to a file descriptor.
@@ -718,8 +692,8 @@ int evbuffer_write(struct evbuffer *buffer, evutil_socket_t fd);
   @see evbuffer_read()
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_write_atmost(struct evbuffer *buffer, evutil_socket_t fd,
-						  ev_ssize_t howmuch);
+int evbuffer_write_atmost(struct evbuffer *buffer, int fd,
+						  ssize_t howmuch);
 
 /**
   Read from a file descriptor and store the result in an evbuffer.
@@ -732,7 +706,7 @@ int evbuffer_write_atmost(struct evbuffer *buffer, evutil_socket_t fd,
   @see evbuffer_write()
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_read(struct evbuffer *buffer, evutil_socket_t fd, int howmuch);
+int evbuffer_read(struct evbuffer *buffer, int fd, int howmuch);
 
 /**
    Search for a string within an evbuffer.
@@ -830,30 +804,30 @@ struct evbuffer_ptr evbuffer_search_eol(struct evbuffer *buffer,
 
     The total data in the extents that you get back may be more than
     you requested (if there is more data last extent than you asked
-    for), or less (if you do not provide enough evbuffer_iovecs, or if
+    for), or less (if you do not provide enough iovecs, or if
     the buffer does not have as much data as you asked to see).
 
     @param buffer the evbuffer to peek into,
     @param len the number of bytes to try to peek.  If len is negative, we
        will try to fill as much of vec_out as we can.  If len is negative
-       and vec_out is not provided, we return the number of evbuffer_iovecs
+       and vec_out is not provided, we return the number of iovecs
        that would be needed to get all the data in the buffer.
     @param start_at an evbuffer_ptr indicating the point at which we
        should start looking for data.  NULL means, "At the start of the
        buffer."
-    @param vec_out an array of evbuffer_iovec
+    @param vec_out an array of iovec
     @param n_vec the length of vec_out.  If 0, we only count how many
        extents would be necessary to point to the requested amount of
        data.
     @return The number of extents needed.  This may be less than n_vec
-       if we didn't need all the evbuffer_iovecs we were given, or more
+       if we didn't need all the iovecs we were given, or more
        than n_vec if we would need more to return all the data that was
        requested.
  */
 EVENT2_EXPORT_SYMBOL
-int evbuffer_peek(struct evbuffer *buffer, ev_ssize_t len,
+int evbuffer_peek(struct evbuffer *buffer, ssize_t len,
     struct evbuffer_ptr *start_at,
-    struct evbuffer_iovec *vec_out, int n_vec);
+    struct iovec *vec_out, int n_vec);
 
 
 /** Structure passed to an evbuffer_cb_func evbuffer callback
@@ -943,7 +917,7 @@ int evbuffer_remove_cb(struct evbuffer *buffer, evbuffer_cb_func cb, void *cbarg
  */
 EVENT2_EXPORT_SYMBOL
 int evbuffer_cb_set_flags(struct evbuffer *buffer,
-			  struct evbuffer_cb_entry *cb, ev_uint32_t flags);
+			  struct evbuffer_cb_entry *cb, uint32_t flags);
 
 /** Change the flags that are set for a callback on a buffer by removing some
 
@@ -954,31 +928,7 @@ int evbuffer_cb_set_flags(struct evbuffer *buffer,
  */
 EVENT2_EXPORT_SYMBOL
 int evbuffer_cb_clear_flags(struct evbuffer *buffer,
-			  struct evbuffer_cb_entry *cb, ev_uint32_t flags);
-
-#if 0
-/** Postpone calling a given callback until unsuspend is called later.
-
-    This is different from disabling the callback, since the callback will get
-	invoked later if the buffer size changes between now and when we unsuspend
-	it.
-
-	@param the buffer that the callback is watching.
-	@param cb the callback we want to suspend.
- */
-EVENT2_EXPORT_SYMBOL
-void evbuffer_cb_suspend(struct evbuffer *buffer, struct evbuffer_cb_entry *cb);
-/** Stop postponing a callback that we postponed with evbuffer_cb_suspend.
-
-	If data was added to or removed from the buffer while the callback was
-	suspended, the callback will get called once now.
-
-	@param the buffer that the callback is watching.
-	@param cb the callback we want to stop suspending.
- */
-EVENT2_EXPORT_SYMBOL
-void evbuffer_cb_unsuspend(struct evbuffer *buffer, struct evbuffer_cb_entry *cb);
-#endif
+			  struct evbuffer_cb_entry *cb, uint32_t flags);
 
 /**
   Makes the data at the beginning of an evbuffer contiguous.
@@ -991,7 +941,7 @@ void evbuffer_cb_unsuspend(struct evbuffer *buffer, struct evbuffer_cb_entry *cb
 */
 
 EVENT2_EXPORT_SYMBOL
-unsigned char *evbuffer_pullup(struct evbuffer *buf, ev_ssize_t size);
+unsigned char *evbuffer_pullup(struct evbuffer *buf, ssize_t size);
 
 /**
   Prepends data to the beginning of the evbuffer
@@ -1068,7 +1018,7 @@ int evbuffer_defer_callbacks(struct evbuffer *buffer, struct event_base *base);
   @return the number of bytes successfully written to the output buffer.
 */
 EVENT2_EXPORT_SYMBOL
-size_t evbuffer_add_iovec(struct evbuffer * buffer, struct evbuffer_iovec * vec, int n_vec);
+size_t evbuffer_add_iovec(struct evbuffer * buffer, struct iovec * vec, int n_vec);
 
 #ifdef __cplusplus
 }

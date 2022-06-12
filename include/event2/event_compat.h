@@ -48,12 +48,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 /* For int types. */
 #include <event2/util.h>
@@ -144,8 +140,8 @@ int event_loopbreak(void);
   @see event_base_once()
  */
 EVENT2_EXPORT_SYMBOL
-int event_once(evutil_socket_t , short,
-    void (*)(evutil_socket_t, short, void *), void *, const struct timeval *);
+int event_once(int , short,
+    void (*)(int, short, void *), void *, const struct timeval *);
 
 
 /**
@@ -181,7 +177,7 @@ int	event_priority_init(int);
      Use event_assign() or event_new() instead.
  */
 EVENT2_EXPORT_SYMBOL
-void event_set(struct event *, evutil_socket_t, short, void (*)(evutil_socket_t, short, void *), void *);
+void event_set(struct event *, int, short, void (*)(int, short, void *), void *);
 
 #define evtimer_set(ev, cb, arg)	event_set((ev), -1, 0, (cb), (arg))
 #define evsignal_set(ev, x, cb, arg)	\

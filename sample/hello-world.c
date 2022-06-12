@@ -11,13 +11,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <signal.h>
-#ifndef _WIN32
 #include <netinet/in.h>
-# ifdef _XOPEN_SOURCE_EXTENDED
-#  include <arpa/inet.h>
-# endif
 #include <sys/socket.h>
-#endif
 
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -29,11 +24,11 @@ static const char MESSAGE[] = "Hello, World!\n";
 
 static const int PORT = 9995;
 
-static void listener_cb(struct evconnlistener *, evutil_socket_t,
+static void listener_cb(struct evconnlistener *, int,
     struct sockaddr *, int socklen, void *);
 static void conn_writecb(struct bufferevent *, void *);
 static void conn_eventcb(struct bufferevent *, short, void *);
-static void signal_cb(evutil_socket_t, short, void *);
+static void signal_cb(int, short, void *);
 
 int
 main(int argc, char **argv)
@@ -43,10 +38,6 @@ main(int argc, char **argv)
 	struct event *signal_event;
 
 	struct sockaddr_in sin = {0};
-#ifdef _WIN32
-	WSADATA wsa_data;
-	WSAStartup(0x0201, &wsa_data);
-#endif
 
 	base = event_base_new();
 	if (!base) {
@@ -85,7 +76,7 @@ main(int argc, char **argv)
 }
 
 static void
-listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
+listener_cb(struct evconnlistener *listener, int fd,
     struct sockaddr *sa, int socklen, void *user_data)
 {
 	struct event_base *base = user_data;
@@ -129,7 +120,7 @@ conn_eventcb(struct bufferevent *bev, short events, void *user_data)
 }
 
 static void
-signal_cb(evutil_socket_t sig, short events, void *user_data)
+signal_cb(int sig, short events, void *user_data)
 {
 	struct event_base *base = user_data;
 	struct timeval delay = { 2, 0 };

@@ -41,12 +41,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 /* For int types. */
 #include <event2/util.h>
@@ -107,11 +103,11 @@ struct event;
 struct event_callback {
 	TAILQ_ENTRY(event_callback) evcb_active_next;
 	short evcb_flags;
-	ev_uint8_t evcb_pri;	/* smaller numbers are higher priority */
-	ev_uint8_t evcb_closure;
+	uint8_t evcb_pri;	/* smaller numbers are higher priority */
+	uint8_t evcb_closure;
 	/* allows us to adopt for different types of events */
         union {
-		void (*evcb_callback)(evutil_socket_t, short, void *);
+		void (*evcb_callback)(int, short, void *);
 		void (*evcb_selfcb)(struct event_callback *, void *);
 		void (*evcb_evfinalize)(struct event *, void *);
 		void (*evcb_cbfinalize)(struct event_callback *, void *);
@@ -128,7 +124,7 @@ struct event {
 		TAILQ_ENTRY(event) ev_next_with_common_timeout;
 		int min_heap_idx;
 	} ev_timeout_pos;
-	evutil_socket_t ev_fd;
+	int ev_fd;
 
 	struct event_base *ev_base;
 

@@ -8,39 +8,26 @@
 #include <event2/event-config.h>
 
 /* Compatibility for possible missing IPv6 declarations */
-#include "../ipv6-internal.h"
 
 #include <sys/types.h>
 
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <getopt.h>
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
 
 #include <event2/event.h>
 #include <event2/dns.h>
 #include <event2/dns_struct.h>
 #include <event2/util.h>
 
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define u32 ev_uint32_t
-#define u8 ev_uint8_t
+#define u32 uint32_t
+#define u8 uint8_t
 
 static const char *
 debug_ntoa(u32 address)
@@ -74,11 +61,11 @@ main_callback(int result, char type, int count, int ttl,
 }
 
 static void
-gai_callback(int err, struct evutil_addrinfo *ai, void *arg)
+gai_callback(int err, struct addrinfo *ai, void *arg)
 {
 	const char *name = arg;
 	int i;
-	struct evutil_addrinfo *first_ai = ai;
+	struct addrinfo *first_ai = ai;
 
 	if (err) {
 		printf("%s: %s\n", name, evutil_gai_strerror(err));
@@ -183,19 +170,12 @@ main(int c, char **v) {
 		}
 	}
 
-#ifdef _WIN32
-	{
-		WSADATA WSAData;
-		WSAStartup(0x101, &WSAData);
-	}
-#endif
-
 	event_base = event_base_new();
 	evdns_base = evdns_base_new(event_base, EVDNS_BASE_DISABLE_WHEN_INACTIVE);
 	evdns_set_log_fn(logfn);
 
 	if (o.servertest) {
-		evutil_socket_t sock;
+		int sock;
 		struct sockaddr_in my_addr;
 		sock = socket(PF_INET, SOCK_DGRAM, 0);
 		if (sock == -1) {
@@ -214,11 +194,6 @@ main(int c, char **v) {
 	}
 	if (optind < c) {
 		int res;
-#ifdef _WIN32
-		if (o.resolv_conf == NULL && !o.ns)
-			res = evdns_base_config_windows_nameservers(evdns_base);
-		else
-#endif
 		if (o.ns)
 			res = evdns_base_nameserver_ip_add(evdns_base, o.ns);
 		else
@@ -231,7 +206,7 @@ main(int c, char **v) {
 		}
 	}
 
-	printf("EVUTIL_AI_CANONNAME in example = %d\n", EVUTIL_AI_CANONNAME);
+	printf("AI_CANONNAME in example = %d\n", AI_CANONNAME);
 	for (; optind < c; ++optind) {
 		if (o.reverse) {
 			struct in_addr addr;
@@ -242,11 +217,11 @@ main(int c, char **v) {
 			fprintf(stderr, "resolving %s...\n",v[optind]);
 			evdns_base_resolve_reverse(evdns_base, &addr, 0, main_callback, v[optind]);
 		} else if (o.use_getaddrinfo) {
-			struct evutil_addrinfo hints;
+			struct addrinfo hints;
 			memset(&hints, 0, sizeof(hints));
 			hints.ai_family = PF_UNSPEC;
 			hints.ai_protocol = IPPROTO_TCP;
-			hints.ai_flags = EVUTIL_AI_CANONNAME;
+			hints.ai_flags = AI_CANONNAME;
 			fprintf(stderr, "resolving (fwd) %s...\n",v[optind]);
 			evdns_getaddrinfo(evdns_base, v[optind], NULL, &hints,
 			    gai_callback, v[optind]);

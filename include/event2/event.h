@@ -189,12 +189,8 @@ extern "C" {
 #endif
 
 #include <event2/event-config.h>
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 #include <stdio.h>
 
@@ -772,7 +768,7 @@ void event_set_fatal_callback(event_fatal_cb cb);
    debugging logs off.
  */
 EVENT2_EXPORT_SYMBOL
-void event_enable_debug_logging(ev_uint32_t which);
+void event_enable_debug_logging(uint32_t which);
 
 /**
   Associate a different event base with an event.
@@ -1011,7 +1007,7 @@ int event_base_got_break(struct event_base *);
 
    @see event_new()
  */
-typedef void (*event_callback_fn)(evutil_socket_t, short, void *);
+typedef void (*event_callback_fn)(int, short, void *);
 
 /**
   Return a value used to specify that the event itself must be used as the callback argument.
@@ -1087,7 +1083,7 @@ void *event_self_cbarg(void);
   @see event_free(), event_add(), event_del(), event_assign()
  */
 EVENT2_EXPORT_SYMBOL
-struct event *event_new(struct event_base *, evutil_socket_t, short, event_callback_fn, void *);
+struct event *event_new(struct event_base *, int, short, event_callback_fn, void *);
 
 
 /**
@@ -1129,7 +1125,7 @@ struct event *event_new(struct event_base *, evutil_socket_t, short, event_callb
     event_get_struct_event_size()
   */
 EVENT2_EXPORT_SYMBOL
-int event_assign(struct event *, struct event_base *, evutil_socket_t, short, event_callback_fn, void *);
+int event_assign(struct event *, struct event_base *, int, short, event_callback_fn, void *);
 
 /**
    Deallocate a struct event * returned by event_new().
@@ -1206,7 +1202,7 @@ int event_free_finalize(unsigned, struct event *, event_finalize_callback_fn);
   @return 0 if successful, or -1 if an error occurred
  */
 EVENT2_EXPORT_SYMBOL
-int event_base_once(struct event_base *, evutil_socket_t, short, event_callback_fn, void *, const struct timeval *);
+int event_base_once(struct event_base *, int, short, event_callback_fn, void *, const struct timeval *);
 
 /**
   Add an event to the set of pending events.
@@ -1343,7 +1339,7 @@ int event_initialized(const struct event *ev);
    no socket.
 */
 EVENT2_EXPORT_SYMBOL
-evutil_socket_t event_get_fd(const struct event *ev);
+int event_get_fd(const struct event *ev);
 
 /**
    Get the event_base associated with an event.
@@ -1385,7 +1381,7 @@ int event_get_priority(const struct event *ev);
  */
 EVENT2_EXPORT_SYMBOL
 void event_get_assignment(const struct event *event,
-    struct event_base **base_out, evutil_socket_t *fd_out, short *events_out,
+    struct event_base **base_out, int *fd_out, short *events_out,
     event_callback_fn *callback_out, void **arg_out);
 
 /**
@@ -1403,38 +1399,6 @@ void event_get_assignment(const struct event *event,
  */
 EVENT2_EXPORT_SYMBOL
 size_t event_get_struct_event_size(void);
-
-/**
-   Get the Libevent version.
-
-   Note that this will give you the version of the library that you're
-   currently linked against, not the version of the headers that you've
-   compiled against.
-
-   @return a string containing the version number of Libevent
-*/
-EVENT2_EXPORT_SYMBOL
-const char *event_get_version(void);
-
-/**
-   Return a numeric representation of Libevent's version.
-
-   Note that this will give you the version of the library that you're
-   currently linked against, not the version of the headers you've used to
-   compile.
-
-   The format uses one byte each for the major, minor, and patchlevel parts of
-   the version number.  The low-order byte is unused.  For example, version
-   2.0.1-alpha has a numeric representation of 0x02000100
-*/
-EVENT2_EXPORT_SYMBOL
-ev_uint32_t event_get_version_number(void);
-
-/** As event_get_version, but gives the version of Libevent's headers. */
-#define LIBEVENT_VERSION EVENT__VERSION
-/** As event_get_version_number, but gives the version number of Libevent's
- * headers. */
-#define LIBEVENT_VERSION_NUMBER EVENT__NUMERIC_VERSION
 
 /** Largest number of priorities that Libevent can support. */
 #define EVENT_MAX_PRIORITIES 256
@@ -1512,7 +1476,6 @@ EVENT2_EXPORT_SYMBOL
 const struct timeval *event_base_init_common_timeout(struct event_base *base,
     const struct timeval *duration);
 
-#if !defined(EVENT__DISABLE_MM_REPLACEMENT) || defined(EVENT_IN_DOXYGEN_)
 /**
  Override the functions that Libevent uses for memory management.
 
@@ -1543,7 +1506,6 @@ void event_set_mem_functions(
 /** This definition is present if Libevent was built with support for
     event_set_mem_functions() */
 #define EVENT_SET_MEM_FUNCTIONS_IMPLEMENTED
-#endif
 
 /**
    Writes a human-readable description of all inserted and/or active
@@ -1570,7 +1532,7 @@ void event_base_dump_events(struct event_base *, FILE *);
    @param events One or more of EV_{READ,WRITE,TIMEOUT}.
  */
 EVENT2_EXPORT_SYMBOL
-void event_base_active_by_fd(struct event_base *base, evutil_socket_t fd, short events);
+void event_base_active_by_fd(struct event_base *base, int fd, short events);
 
 /**
    Activates all pending signals with a given signal number

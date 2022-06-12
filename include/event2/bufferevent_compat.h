@@ -75,7 +75,7 @@
   @see bufferevent_base_set(), bufferevent_free()
   */
 EVENT2_EXPORT_SYMBOL
-struct bufferevent *bufferevent_new(evutil_socket_t fd,
+struct bufferevent *bufferevent_new(int fd,
     evbuffercb readcb, evbuffercb writecb, everrorcb errorcb, void *cbarg);
 
 

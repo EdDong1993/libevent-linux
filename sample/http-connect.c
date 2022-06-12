@@ -57,7 +57,7 @@ static char* uri_hostport(struct evhttp_uri *uri, char buffer[URL_MAX])
 
 static void get_cb(struct evhttp_request *req, void *arg)
 {
-	ev_ssize_t len;
+	ssize_t len;
 	struct evbuffer *evbuf;
 
 	VERIFY(req);

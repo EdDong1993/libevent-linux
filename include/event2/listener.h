@@ -47,7 +47,7 @@ struct evconnlistener;
    @param socklen The length of addr
    @param user_arg the pointer passed to evconnlistener_new()
  */
-typedef void (*evconnlistener_cb)(struct evconnlistener *, evutil_socket_t, struct sockaddr *, int socklen, void *);
+typedef void (*evconnlistener_cb)(struct evconnlistener *, int, struct sockaddr *, int socklen, void *);
 
 /**
    A callback that we invoke when a listener encounters a non-retriable error.
@@ -130,7 +130,7 @@ typedef void (*evconnlistener_errorcb)(struct evconnlistener *, void *);
 EVENT2_EXPORT_SYMBOL
 struct evconnlistener *evconnlistener_new(struct event_base *base,
     evconnlistener_cb cb, void *ptr, unsigned flags, int backlog,
-    evutil_socket_t fd);
+    int fd);
 /**
    Allocate a new evconnlistener object to listen for incoming TCP connections
    on a given address.
@@ -172,7 +172,7 @@ struct event_base *evconnlistener_get_base(struct evconnlistener *lev);
 
 /** Return the socket that an evconnlistner is listening on. */
 EVENT2_EXPORT_SYMBOL
-evutil_socket_t evconnlistener_get_fd(struct evconnlistener *lev);
+int evconnlistener_get_fd(struct evconnlistener *lev);
 
 /** Change the callback on the listener to cb and its user_data to arg.
  */

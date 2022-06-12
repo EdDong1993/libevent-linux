@@ -13,15 +13,10 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef _WIN32
 #include <sys/queue.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <signal.h>
-#else
-#include <winsock2.h>
-#include <windows.h>
-#endif
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,29 +26,14 @@
 #include <event2/event.h>
 
 static void
-fifo_read(evutil_socket_t fd, short event, void *arg)
+fifo_read(int fd, short event, void *arg)
 {
 	char buf[255];
 	int len;
 	struct event *ev = arg;
-#ifdef _WIN32
-	DWORD dwBytesRead;
-#endif
 
 	fprintf(stderr, "fifo_read called with fd: %d, event: %d, arg: %p\n",
 	    (int)fd, event, arg);
-#ifdef _WIN32
-	len = ReadFile((HANDLE)fd, buf, sizeof(buf) - 1, &dwBytesRead, NULL);
-
-	/* Check for end of file. */
-	if (len && dwBytesRead == 0) {
-		fprintf(stderr, "End Of File");
-		event_del(ev);
-		return;
-	}
-
-	buf[dwBytesRead] = '\0';
-#else
 	len = read(fd, buf, sizeof(buf) - 1);
 
 	if (len <= 0) {
@@ -67,40 +47,22 @@ fifo_read(evutil_socket_t fd, short event, void *arg)
 	}
 
 	buf[len] = '\0';
-#endif
 	fprintf(stdout, "Read: %s\n", buf);
 }
 
 /* On Unix, cleanup event.fifo if SIGINT is received. */
-#ifndef _WIN32
 static void
-signal_cb(evutil_socket_t fd, short event, void *arg)
+signal_cb(int fd, short event, void *arg)
 {
 	struct event_base *base = arg;
 	event_base_loopbreak(base);
 }
-#endif
 
 int
 main(int argc, char **argv)
 {
 	struct event *evfifo;
 	struct event_base* base;
-#ifdef _WIN32
-	HANDLE socket;
-	/* Open a file. */
-	socket = CreateFileA("test.txt",	/* open File */
-			GENERIC_READ,		/* open for reading */
-			0,			/* do not share */
-			NULL,			/* no security */
-			OPEN_EXISTING,		/* existing file only */
-			FILE_ATTRIBUTE_NORMAL,	/* normal file */
-			NULL);			/* no attr. template */
-
-	if (socket == INVALID_HANDLE_VALUE)
-		return 1;
-
-#else
 	struct event *signal_int;
 	struct stat st;
 	const char *fifo = "event.fifo";
@@ -128,34 +90,23 @@ main(int argc, char **argv)
 	}
 
 	fprintf(stderr, "Write data to %s\n", fifo);
-#endif
 	/* Initialize the event library */
 	base = event_base_new();
 
-	/* Initialize one event */
-#ifdef _WIN32
-	evfifo = event_new(base, (evutil_socket_t)socket, EV_READ|EV_PERSIST, fifo_read,
-                           event_self_cbarg());
-#else
 	/* catch SIGINT so that event.fifo can be cleaned up */
 	signal_int = evsignal_new(base, SIGINT, signal_cb, base);
 	event_add(signal_int, NULL);
 
 	evfifo = event_new(base, socket, EV_READ|EV_PERSIST, fifo_read,
                            event_self_cbarg());
-#endif
 
 	/* Add it to the active events, without a timeout */
 	event_add(evfifo, NULL);
 
 	event_base_dispatch(base);
 	event_base_free(base);
-#ifdef _WIN32
-	CloseHandle(socket);
-#else
 	close(socket);
 	unlink(fifo);
-#endif
 	libevent_global_shutdown();
 	return (0);
 }

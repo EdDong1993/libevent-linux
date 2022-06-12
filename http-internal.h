@@ -53,19 +53,19 @@ struct evhttp_connection {
 	 * server */
 	TAILQ_ENTRY(evhttp_connection) next;
 
-	evutil_socket_t fd;
+	int fd;
 	struct bufferevent *bufev;
 
 	struct event retry_ev;		/* for retrying connects */
 
 	char *bind_address;		/* address to use for binding the src */
-	ev_uint16_t bind_port;		/* local port for binding the src */
+	uint16_t bind_port;		/* local port for binding the src */
 
 	char *address;			/* address to connect to */
-	ev_uint16_t port;
+	uint16_t port;
 
 	size_t max_headers_size;
-	ev_uint64_t max_body_size;
+	uint64_t max_body_size;
 
 	int flags;
 #define EVHTTP_CON_INCOMING	0x0001       /* only one request on it ever */
@@ -153,13 +153,13 @@ struct evhttp {
 	struct timeval timeout;
 
 	size_t default_max_headers_size;
-	ev_uint64_t default_max_body_size;
+	uint64_t default_max_body_size;
 	int flags;
 	const char *default_content_type;
 
 	/* Bitmask of all HTTP methods that we accept and pass to user
 	 * callbacks. */
-	ev_uint16_t allowed_methods;
+	uint16_t allowed_methods;
 
 	/* Fallback callback if all the other callbacks for this connection
 	   don't match. */

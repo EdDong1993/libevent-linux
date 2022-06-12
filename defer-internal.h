@@ -47,11 +47,11 @@ typedef void (*deferred_cb_fn)(struct event_callback *, void *);
    @param arg The function's second argument.
  */
 EVENT2_EXPORT_SYMBOL
-void event_deferred_cb_init_(struct event_callback *, ev_uint8_t, deferred_cb_fn, void *);
+void event_deferred_cb_init_(struct event_callback *, uint8_t, deferred_cb_fn, void *);
 /**
    Change the priority of a non-pending event_callback.
  */
-void event_deferred_cb_set_priority_(struct event_callback *, ev_uint8_t);
+void event_deferred_cb_set_priority_(struct event_callback *, uint8_t);
 /**
    Cancel a struct event_callback if it is currently scheduled in an event_base.
  */

@@ -98,7 +98,7 @@ struct evhttp *evhttp_new(struct event_base *base);
  * @see evhttp_accept_socket()
  */
 EVENT2_EXPORT_SYMBOL
-int evhttp_bind_socket(struct evhttp *http, const char *address, ev_uint16_t port);
+int evhttp_bind_socket(struct evhttp *http, const char *address, uint16_t port);
 
 /**
  * Like evhttp_bind_socket(), but returns a handle for referencing the socket.
@@ -112,7 +112,7 @@ int evhttp_bind_socket(struct evhttp *http, const char *address, ev_uint16_t por
  * @see evhttp_bind_socket(), evhttp_del_accept_socket()
  */
 EVENT2_EXPORT_SYMBOL
-struct evhttp_bound_socket *evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, ev_uint16_t port);
+struct evhttp_bound_socket *evhttp_bind_socket_with_handle(struct evhttp *http, const char *address, uint16_t port);
 
 /**
  * Makes an HTTP server accept connections on the specified socket.
@@ -131,7 +131,7 @@ struct evhttp_bound_socket *evhttp_bind_socket_with_handle(struct evhttp *http, 
  * @see evhttp_bind_socket()
  */
 EVENT2_EXPORT_SYMBOL
-int evhttp_accept_socket(struct evhttp *http, evutil_socket_t fd);
+int evhttp_accept_socket(struct evhttp *http, int fd);
 
 /**
  * Like evhttp_accept_socket(), but returns a handle for referencing the socket.
@@ -144,7 +144,7 @@ int evhttp_accept_socket(struct evhttp *http, evutil_socket_t fd);
  * @see evhttp_accept_socket(), evhttp_del_accept_socket()
  */
 EVENT2_EXPORT_SYMBOL
-struct evhttp_bound_socket *evhttp_accept_socket_with_handle(struct evhttp *http, evutil_socket_t fd);
+struct evhttp_bound_socket *evhttp_accept_socket_with_handle(struct evhttp *http, int fd);
 
 /**
  * The most low-level evhttp_bind/accept method: takes an evconnlistener, and
@@ -202,7 +202,7 @@ void evhttp_del_accept_socket(struct evhttp *http, struct evhttp_bound_socket *b
  * @see evhttp_bind_socket_with_handle(), evhttp_accept_socket_with_handle()
  */
 EVENT2_EXPORT_SYMBOL
-evutil_socket_t evhttp_bound_socket_get_fd(struct evhttp_bound_socket *bound_socket);
+int evhttp_bound_socket_get_fd(struct evhttp_bound_socket *bound_socket);
 
 /**
  * Free the previously created HTTP server.
@@ -217,10 +217,10 @@ void evhttp_free(struct evhttp* http);
 
 /** XXX Document. */
 EVENT2_EXPORT_SYMBOL
-void evhttp_set_max_headers_size(struct evhttp* http, ev_ssize_t max_headers_size);
+void evhttp_set_max_headers_size(struct evhttp* http, ssize_t max_headers_size);
 /** XXX Document. */
 EVENT2_EXPORT_SYMBOL
-void evhttp_set_max_body_size(struct evhttp* http, ev_ssize_t max_body_size);
+void evhttp_set_max_body_size(struct evhttp* http, ssize_t max_body_size);
 
 /**
   Set the value to use for the Content-Type header when none was provided. If
@@ -246,7 +246,7 @@ void evhttp_set_default_content_type(struct evhttp *http,
   @param methods bit mask constructed from evhttp_cmd_type values
 */
 EVENT2_EXPORT_SYMBOL
-void evhttp_set_allowed_methods(struct evhttp* http, ev_uint16_t methods);
+void evhttp_set_allowed_methods(struct evhttp* http, uint16_t methods);
 
 /**
    Set a callback for a specified URI
@@ -522,7 +522,7 @@ enum evhttp_request_kind { EVHTTP_REQUEST, EVHTTP_RESPONSE };
  */
 EVENT2_EXPORT_SYMBOL
 struct evhttp_connection *evhttp_connection_base_bufferevent_new(
-	struct event_base *base, struct evdns_base *dnsbase, struct bufferevent* bev, const char *address, ev_uint16_t port);
+	struct event_base *base, struct evdns_base *dnsbase, struct bufferevent* bev, const char *address, uint16_t port);
 
 /**
  * Return the bufferevent that an evhttp_connection is using.
@@ -644,7 +644,7 @@ void evhttp_request_free(struct evhttp_request *req);
 EVENT2_EXPORT_SYMBOL
 struct evhttp_connection *evhttp_connection_base_new(
 	struct event_base *base, struct evdns_base *dnsbase,
-	const char *address, ev_uint16_t port);
+	const char *address, uint16_t port);
 
 /**
  * Set family hint for DNS requests.
@@ -703,11 +703,11 @@ struct event_base *evhttp_connection_get_base(struct evhttp_connection *req);
 
 EVENT2_EXPORT_SYMBOL
 void evhttp_connection_set_max_headers_size(struct evhttp_connection *evcon,
-    ev_ssize_t new_max_headers_size);
+    ssize_t new_max_headers_size);
 
 EVENT2_EXPORT_SYMBOL
 void evhttp_connection_set_max_body_size(struct evhttp_connection* evcon,
-    ev_ssize_t new_max_body_size);
+    ssize_t new_max_body_size);
 
 /** Frees an http connection */
 EVENT2_EXPORT_SYMBOL
@@ -729,7 +729,7 @@ void evhttp_connection_set_local_address(struct evhttp_connection *evcon,
 /** sets the local port from which http connections are made */
 EVENT2_EXPORT_SYMBOL
 void evhttp_connection_set_local_port(struct evhttp_connection *evcon,
-    ev_uint16_t port);
+    uint16_t port);
 
 /** Sets the timeout in seconds for events related to this connection */
 EVENT2_EXPORT_SYMBOL
@@ -763,7 +763,7 @@ void evhttp_connection_set_closecb(struct evhttp_connection *evcon,
 /** Get the remote address and port associated with this connection. */
 EVENT2_EXPORT_SYMBOL
 void evhttp_connection_get_peer(struct evhttp_connection *evcon,
-    char **address, ev_uint16_t *port);
+    char **address, uint16_t *port);
 
 /** Get the remote address associated with this connection.
  * extracted from getpeername() OR from nameserver.
@@ -926,7 +926,7 @@ char *evhttp_encode_uri(const char *str);
    @return a newly allocate URI-encoded string, or NULL on failure.
  */
 EVENT2_EXPORT_SYMBOL
-char *evhttp_uriencode(const char *str, ev_ssize_t size, int space_to_plus);
+char *evhttp_uriencode(const char *str, ssize_t size, int space_to_plus);
 
 /**
   Helper function to sort of decode a URI-encoded string.  Unlike

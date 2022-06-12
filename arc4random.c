@@ -41,36 +41,15 @@
  * RC4 is a registered trademark of RSA Laboratories.
  */
 
-#ifndef ARC4RANDOM_EXPORT
-#define ARC4RANDOM_EXPORT
-#endif
-
-#ifndef ARC4RANDOM_UINT32
-#define ARC4RANDOM_UINT32 uint32_t
-#endif
-
-#ifndef ARC4RANDOM_NO_INCLUDES
 #include "evconfig-private.h"
-#ifdef _WIN32
-#include <wincrypt.h>
-#include <process.h>
-#include <winerror.h>
-#else
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/time.h>
-#ifdef EVENT__HAVE_SYS_SYSCTL_H
-#include <sys/sysctl.h>
-#endif
-#ifdef EVENT__HAVE_SYS_RANDOM_H
 #include <sys/random.h>
-#endif
-#endif
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#endif
 
 /* Add platform entropy 32 bytes (256 bits) at a time. */
 #define ADD_ENTROPY 32
@@ -83,11 +62,6 @@ struct arc4_stream {
 	unsigned char j;
 	unsigned char s[256];
 };
-
-#ifdef _WIN32
-#define getpid _getpid
-#define pid_t int
-#endif
 
 static int rs_initialized;
 static struct arc4_stream rs;
@@ -124,7 +98,6 @@ arc4_addrandom(const unsigned char *dat, int datlen)
 	rs.j = rs.i;
 }
 
-#ifndef _WIN32
 static ssize_t
 read_all(int fd, unsigned char *buf, size_t count)
 {
@@ -142,36 +115,7 @@ read_all(int fd, unsigned char *buf, size_t count)
 
 	return (ssize_t)numread;
 }
-#endif
 
-#ifdef _WIN32
-#define TRY_SEED_WIN32
-static int
-arc4_seed_win32(void)
-{
-	/* This is adapted from Tor's crypto_seed_rng() */
-	static int provider_set = 0;
-	static HCRYPTPROV provider;
-	unsigned char buf[ADD_ENTROPY];
-
-	if (!provider_set) {
-		if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_FULL,
-		    CRYPT_VERIFYCONTEXT)) {
-			if (GetLastError() != (DWORD)NTE_BAD_KEYSET)
-				return -1;
-		}
-		provider_set = 1;
-	}
-	if (!CryptGenRandom(provider, sizeof(buf), buf))
-		return -1;
-	arc4_addrandom(buf, sizeof(buf));
-	evutil_memclear_(buf, sizeof(buf));
-	return 0;
-}
-#endif
-
-#if defined(EVENT__HAVE_GETRANDOM)
-#define TRY_SEED_GETRANDOM
 static int
 arc4_seed_getrandom(void)
 {
@@ -199,51 +143,7 @@ arc4_seed_getrandom(void)
 	evutil_memclear_(buf, sizeof(buf));
 	return 0;
 }
-#endif /* EVENT__HAVE_GETRANDOM */
 
-#if defined(EVENT__HAVE_SYS_SYSCTL_H) && defined(EVENT__HAVE_SYSCTL)
-#if EVENT__HAVE_DECL_CTL_KERN && EVENT__HAVE_DECL_KERN_ARND
-#define TRY_SEED_SYSCTL_BSD
-static int
-arc4_seed_sysctl_bsd(void)
-{
-	/* Based on code from William Ahern and from OpenBSD, this function
-	 * tries to use the KERN_ARND syscall to get entropy from the kernel.
-	 * This can work even if /dev/urandom is inaccessible for some reason
-	 * (e.g., we're running in a chroot). */
-	int mib[] = { CTL_KERN, KERN_ARND };
-	unsigned char buf[ADD_ENTROPY];
-	size_t len, n;
-	int i, any_set;
-
-	memset(buf, 0, sizeof(buf));
-
-	len = sizeof(buf);
-	if (sysctl(mib, 2, buf, &len, NULL, 0) == -1) {
-		for (len = 0; len < sizeof(buf); len += sizeof(unsigned)) {
-			n = sizeof(unsigned);
-			if (n + len > sizeof(buf))
-			    n = len - sizeof(buf);
-			if (sysctl(mib, 2, &buf[len], &n, NULL, 0) == -1)
-				return -1;
-		}
-	}
-	/* make sure that the buffer actually got set. */
-	for (i=any_set=0; i<sizeof(buf); ++i) {
-		any_set |= buf[i];
-	}
-	if (!any_set)
-		return -1;
-
-	arc4_addrandom(buf, sizeof(buf));
-	evutil_memclear_(buf, sizeof(buf));
-	return 0;
-}
-#endif
-#endif /* defined(EVENT__HAVE_SYS_SYSCTL_H) */
-
-#ifdef __linux__
-#define TRY_SEED_PROC_SYS_KERNEL_RANDOM_UUID
 static int
 arc4_seed_proc_sys_kernel_random_uuid(void)
 {
@@ -284,10 +184,7 @@ arc4_seed_proc_sys_kernel_random_uuid(void)
 	evutil_memclear_(buf, sizeof(buf));
 	return 0;
 }
-#endif
 
-#ifndef _WIN32
-#define TRY_SEED_URANDOM
 static char *arc4random_urandom_filename = NULL;
 
 static int arc4_seed_urandom_helper_(const char *fname)
@@ -327,7 +224,6 @@ arc4_seed_urandom(void)
 
 	return -1;
 }
-#endif
 
 static int
 arc4_seed(void)
@@ -336,27 +232,13 @@ arc4_seed(void)
 	/* We try every method that might work, and don't give up even if one
 	 * does seem to work.  There's no real harm in over-seeding, and if
 	 * one of these sources turns out to be broken, that would be bad. */
-#ifdef TRY_SEED_WIN32
-	if (0 == arc4_seed_win32())
-		ok = 1;
-#endif
-#ifdef TRY_SEED_GETRANDOM
 	if (0 == arc4_seed_getrandom())
 		ok = 1;
-#endif
-#ifdef TRY_SEED_URANDOM
 	if (0 == arc4_seed_urandom())
 		ok = 1;
-#endif
-#ifdef TRY_SEED_PROC_SYS_KERNEL_RANDOM_UUID
 	if (arc4random_urandom_filename == NULL &&
 	    0 == arc4_seed_proc_sys_kernel_random_uuid())
 		ok = 1;
-#endif
-#ifdef TRY_SEED_SYSCTL_BSD
-	if (0 == arc4_seed_sysctl_bsd())
-		ok = 1;
-#endif
 	return ok ? 0 : -1;
 }
 
@@ -439,20 +321,7 @@ arc4_getword(void)
 	return val;
 }
 
-#ifndef ARC4RANDOM_NOSTIR
-ARC4RANDOM_EXPORT int
-arc4random_stir(void)
-{
-	int val;
-	ARC4_LOCK_();
-	val = arc4_stir();
-	ARC4_UNLOCK_();
-	return val;
-}
-#endif
-
-#ifndef ARC4RANDOM_NOADDRANDOM
-ARC4RANDOM_EXPORT void
+static void
 arc4random_addrandom(const unsigned char *dat, int datlen)
 {
 	int j;
@@ -468,23 +337,8 @@ arc4random_addrandom(const unsigned char *dat, int datlen)
 	}
 	ARC4_UNLOCK_();
 }
-#endif
 
-#ifndef ARC4RANDOM_NORANDOM
-ARC4RANDOM_EXPORT ARC4RANDOM_UINT32
-arc4random(void)
-{
-	ARC4RANDOM_UINT32 val;
-	ARC4_LOCK_();
-	arc4_count -= 4;
-	arc4_stir_if_needed();
-	val = arc4_getword();
-	ARC4_UNLOCK_();
-	return val;
-}
-#endif
-
-ARC4RANDOM_EXPORT void
+static void
 arc4random_buf(void *buf_, size_t n)
 {
 	unsigned char *buf = buf_;
@@ -497,50 +351,3 @@ arc4random_buf(void *buf_, size_t n)
 	}
 	ARC4_UNLOCK_();
 }
-
-#ifndef ARC4RANDOM_NOUNIFORM
-/*
- * Calculate a uniformly distributed random number less than upper_bound
- * avoiding "modulo bias".
- *
- * Uniformity is achieved by generating new random numbers until the one
- * returned is outside the range [0, 2**32 % upper_bound).  This
- * guarantees the selected random number will be inside
- * [2**32 % upper_bound, 2**32) which maps back to [0, upper_bound)
- * after reduction modulo upper_bound.
- */
-ARC4RANDOM_EXPORT unsigned int
-arc4random_uniform(unsigned int upper_bound)
-{
-	ARC4RANDOM_UINT32 r, min;
-
-	if (upper_bound < 2)
-		return 0;
-
-#if (UINT_MAX > 0xffffffffUL)
-	min = 0x100000000UL % upper_bound;
-#else
-	/* Calculate (2**32 % upper_bound) avoiding 64-bit math */
-	if (upper_bound > 0x80000000)
-		min = 1 + ~upper_bound;		/* 2**32 - upper_bound */
-	else {
-		/* (2**32 - (x * 2)) % x == 2**32 % x when x <= 2**31 */
-		min = ((0xffffffff - (upper_bound * 2)) + 1) % upper_bound;
-	}
-#endif
-
-	/*
-	 * This could theoretically loop forever but each retry has
-	 * p > 0.5 (worst case, usually far better) of selecting a
-	 * number inside the range we need, so it should rarely need
-	 * to re-roll.
-	 */
-	for (;;) {
-		r = arc4random();
-		if (r >= min)
-			break;
-	}
-
-	return r % upper_bound;
-}
-#endif

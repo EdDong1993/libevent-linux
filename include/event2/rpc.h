@@ -474,14 +474,12 @@ enum EVRPC_HOOK_TYPE {
 	EVRPC_OUTPUT		/**< apply the function to an output hook */
 };
 
-#ifndef _WIN32
 /** Deprecated alias for EVRPC_INPUT.  Not available on windows, where it
  * conflicts with platform headers. */
 #define INPUT EVRPC_INPUT
 /** Deprecated alias for EVRPC_OUTPUT.  Not available on windows, where it
  * conflicts with platform headers. */
 #define OUTPUT EVRPC_OUTPUT
-#endif
 
 /**
  * Return value from hook processing functions
