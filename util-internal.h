@@ -27,7 +27,7 @@
 #define UTIL_INTERNAL_H_INCLUDED_
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #include <errno.h>
 
@@ -35,15 +35,10 @@
 #include "log-internal.h"
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef EVENT__HAVE_SYS_EVENTFD_H
 #include <sys/eventfd.h>
-#endif
 #include "event2/util.h"
 
-#include "time-internal.h"
 #include "ipv6-internal.h"
 
 #ifdef __cplusplus
@@ -51,40 +46,12 @@ extern "C" {
 #endif
 
 /* __has_attribute() wrapper */
-#ifdef __has_attribute
 # define EVUTIL_HAS_ATTRIBUTE __has_attribute
-#endif
-/** clang 3 __has_attribute misbehaves in some versions */
-#if defined(__clang__) && __clang__ == 1
-# if defined(__apple_build_version__)
-#  if __clang_major__ <= 6
-#   undef EVUTIL_HAS_ATTRIBUTE
-#  endif
-# else /* !__apple_build_version__ */
-#  if __clang_major__ == 3 && __clang_minor__ >= 2 && __clang_minor__ <= 5
-#   undef EVUTIL_HAS_ATTRIBUTE
-#  endif
-# endif /* __apple_build_version__ */
-#endif /*\ defined(__clang__) && __clang__ == 1 */
-#ifndef EVUTIL_HAS_ATTRIBUTE
-# define EVUTIL_HAS_ATTRIBUTE(x) 0
-#endif
-
-/* If we need magic to say "inline", get it for free internally. */
-#ifdef EVENT__inline
-#define inline EVENT__inline
-#endif
 
 /* Define to appropriate substitute if compiler doesnt have __func__ */
-#if defined(EVENT__HAVE___func__)
 # ifndef __func__
 #  define __func__ __func__
 # endif
-#elif defined(EVENT__HAVE___FUNCTION__)
-# define __func__ __FUNCTION__
-#else
-# define __func__ __FILE__
-#endif
 
 /* A good no-op to use in macro definitions. */
 #define EVUTIL_NIL_STMT_ ((void)0)
@@ -377,21 +344,6 @@ ev_int32_t evutil_weakrand_range_(struct evutil_weakrand_state *seed, ev_int32_t
 #define EVUTIL_FAILURE_CHECK(cond) EVUTIL_UNLIKELY(cond)
 #endif
 
-#ifndef EVENT__HAVE_STRUCT_SOCKADDR_STORAGE
-/* Replacement for sockaddr storage that we can use internally on platforms
- * that lack it.  It is not space-efficient, but neither is sockaddr_storage.
- */
-struct sockaddr_storage {
-	union {
-		struct sockaddr ss_sa;
-		struct sockaddr_in ss_sin;
-		struct sockaddr_in6 ss_sin6;
-		char ss_padding[128];
-	} ss_union;
-};
-#define ss_family ss_union.ss_sa.sa_family
-#endif
-
 /* Internal addrinfo error code.  This one is returned from only from
  * evutil_getaddrinfo_common_, when we are sure that we'll have to hit a DNS
  * server. */
@@ -483,20 +435,6 @@ HMODULE evutil_load_windows_system_library_(const TCHAR *library_name);
 #define EV_SSIZE_FMT "%zd"
 #define EV_SIZE_ARG(x) (x)
 #define EV_SSIZE_ARG(x) (x)
-#endif
-#endif
-
-#ifndef EV_SIZE_FMT
-#if (EVENT__SIZEOF_SIZE_T <= EVENT__SIZEOF_LONG)
-#define EV_SIZE_FMT "%lu"
-#define EV_SSIZE_FMT "%ld"
-#define EV_SIZE_ARG(x) ((unsigned long)(x))
-#define EV_SSIZE_ARG(x) ((long)(x))
-#else
-#define EV_SIZE_FMT EV_U64_FMT
-#define EV_SSIZE_FMT EV_I64_FMT
-#define EV_SIZE_ARG(x) EV_U64_ARG(x)
-#define EV_SSIZE_ARG(x) EV_I64_ARG(x)
 #endif
 #endif
 

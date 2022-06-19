@@ -40,9 +40,7 @@
 # endif
 #include <unistd.h>
 #endif
-#ifdef EVENT__HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
-#endif
 
 #include <string.h>
 
@@ -269,7 +267,6 @@ end:
 		evconnlistener_free(listener);
 }
 
-#ifdef EVENT__HAVE_SETRLIMIT
 static void
 regress_listener_error_unlock(void *arg)
 {
@@ -302,7 +299,6 @@ end:
 	if (listener)
 		evconnlistener_free(listener);
 }
-#endif
 
 struct testcase_t listener_testcases[] = {
 
@@ -312,11 +308,9 @@ struct testcase_t listener_testcases[] = {
 	{ "randport_ts", regress_pick_a_port, TT_FORK|TT_NEED_BASE,
 	  &basic_setup, (char*)"ts"},
 
-#ifdef EVENT__HAVE_SETRLIMIT
 	{ "error_unlock", regress_listener_error_unlock,
 	  TT_FORK|TT_NEED_BASE|TT_NEED_SOCKETPAIR|TT_NO_LOGS,
 	  &basic_setup, NULL},
-#endif
 
 	{ "error", regress_listener_error,
 	  TT_FORK|TT_NEED_BASE|TT_NEED_SOCKETPAIR,

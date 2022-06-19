@@ -36,9 +36,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -116,20 +114,6 @@ http_bind(struct evhttp *myhttp, ev_uint16_t *pport, int mask)
 	return 0;
 }
 
-#ifdef EVENT__HAVE_OPENSSL
-static struct bufferevent *
-https_bev(struct event_base *base, void *arg)
-{
-	SSL *ssl = SSL_new(get_ssl_ctx());
-
-	SSL_use_certificate(ssl, ssl_getcert(ssl_getkey()));
-	SSL_use_PrivateKey(ssl, ssl_getkey());
-
-	return bufferevent_openssl_socket_new(
-		base, -1, ssl, BUFFEREVENT_SSL_ACCEPTING,
-		BEV_OPT_CLOSE_ON_FREE);
-}
-#endif
 static struct evhttp *
 http_setup_gencb(ev_uint16_t *pport, struct event_base *base, int mask,
 	void (*cb)(struct evhttp_request *, void *), void *cbarg)
@@ -141,12 +125,6 @@ http_setup_gencb(ev_uint16_t *pport, struct event_base *base, int mask,
 
 	if (http_bind(myhttp, pport, mask) < 0)
 		return NULL;
-#ifdef EVENT__HAVE_OPENSSL
-	if (mask & HTTP_BIND_SSL) {
-		init_ssl();
-		evhttp_set_bevcb(myhttp, https_bev, NULL);
-	}
-#endif
 
 	evhttp_set_gencb(myhttp, cb, cbarg);
 
@@ -469,19 +447,6 @@ create_bev(struct event_base *base, evutil_socket_t fd, int ssl_mask, int flags_
 	if (!ssl_mask) {
 		bev = bufferevent_socket_new(base, fd, flags);
 	} else {
-#ifdef EVENT__HAVE_OPENSSL
-		SSL *ssl = SSL_new(get_ssl_ctx());
-		if (ssl_mask & HTTP_SSL_FILTER) {
-			struct bufferevent *underlying =
-				bufferevent_socket_new(base, fd, flags);
-			bev = bufferevent_openssl_filter_new(
-				base, underlying, ssl, BUFFEREVENT_SSL_CONNECTING, flags);
-		} else {
-			bev = bufferevent_openssl_socket_new(
-				base, fd, ssl, BUFFEREVENT_SSL_CONNECTING, flags);
-		}
-		bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-#endif
 	}
 
 	return bev;
@@ -1081,17 +1046,7 @@ http_connection_test_(struct basic_test_data *data, int persistent,
 	tt_assert(http);
 
 	if (ssl) {
-#ifdef EVENT__HAVE_OPENSSL
-		SSL *ssl = SSL_new(get_ssl_ctx());
-		struct bufferevent *bev = bufferevent_openssl_socket_new(
-			data->base, -1, ssl,
-			BUFFEREVENT_SSL_CONNECTING, BEV_OPT_DEFER_CALLBACKS);
-		bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-
-		evcon = evhttp_connection_base_bufferevent_new(data->base, dnsbase, bev, address, port);
-#else
 		tt_skip();
-#endif
 	} else {
 		evcon = evhttp_connection_base_new(data->base, dnsbase, address, port);
 	}
@@ -3681,9 +3636,6 @@ http_simple_test_impl(void *arg, int ssl, int dirty, const char *uri)
 	test_ok = 0;
 
 	bev = create_bev(data->base, -1, ssl, 0);
-#ifdef EVENT__HAVE_OPENSSL
-	bufferevent_openssl_set_allow_dirty_shutdown(bev, dirty);
-#endif
 
 	evcon = evhttp_connection_base_bufferevent_new(
 		data->base, NULL, bev, "127.0.0.1", hs.port);
@@ -4665,39 +4617,6 @@ http_request_extra_body_test(void *arg)
 #define HTTPS(name) \
 	{ "https_" #name, https_##name##_test, TT_ISOLATED, &basic_setup, NULL }
 
-#ifdef EVENT__HAVE_OPENSSL
-static void https_basic_test(void *arg)
-{ http_basic_test_impl(arg, 1, "GET /test HTTP/1.1"); }
-static void https_filter_basic_test(void *arg)
-{ http_basic_test_impl(arg, 1 | HTTP_SSL_FILTER, "GET /test HTTP/1.1"); }
-static void https_incomplete_test(void *arg)
-{ http_incomplete_test_(arg, 0, 1); }
-static void https_incomplete_timeout_test(void *arg)
-{ http_incomplete_test_(arg, 1, 1); }
-static void https_simple_test(void *arg)
-{ http_simple_test_impl(arg, 1, 0, "/test"); }
-static void https_simple_dirty_test(void *arg)
-{ http_simple_test_impl(arg, 1, 1, "/test"); }
-static void https_connection_retry_conn_address_test(void *arg)
-{ http_connection_retry_conn_address_test_impl(arg, 1); }
-static void https_connection_retry_test(void *arg)
-{ http_connection_retry_test_impl(arg, 1); }
-static void https_chunk_out_test(void *arg)
-{ http_chunk_out_test_impl(arg, 1); }
-static void https_filter_chunk_out_test(void *arg)
-{ http_chunk_out_test_impl(arg, 1 | HTTP_SSL_FILTER); }
-static void https_stream_out_test(void *arg)
-{ http_stream_out_test_impl(arg, 1); }
-static void https_connection_fail_test(void *arg)
-{ http_connection_fail_test_impl(arg, 1); }
-static void https_write_during_read_test(void *arg)
-{ http_write_during_read_test_impl(arg, 1); }
-static void https_connection_test(void *arg)
-{ http_connection_test_(arg, 0, "127.0.0.1", NULL, 0, AF_UNSPEC, 1); }
-static void https_persist_connection_test(void *arg)
-{ http_connection_test_(arg, 1, "127.0.0.1", NULL, 0, AF_UNSPEC, 1); }
-#endif
-
 struct testcase_t http_testcases[] = {
 	{ "primitives", http_primitives, 0, NULL, NULL },
 	{ "base", http_base_test, TT_FORK, NULL, NULL },
@@ -4776,32 +4695,10 @@ struct testcase_t http_testcases[] = {
 
 	HTTP(request_extra_body),
 
-#ifdef EVENT__HAVE_OPENSSL
-	HTTPS(basic),
-	HTTPS(filter_basic),
-	HTTPS(simple),
-	HTTPS(simple_dirty),
-	HTTPS(incomplete),
-	HTTPS(incomplete_timeout),
-	{ "https_connection_retry", https_connection_retry_test, TT_ISOLATED|TT_OFF_BY_DEFAULT, &basic_setup, NULL },
-	{ "https_connection_retry_conn_address", https_connection_retry_conn_address_test,
-	  TT_ISOLATED|TT_OFF_BY_DEFAULT, &basic_setup, NULL },
-	HTTPS(chunk_out),
-	HTTPS(filter_chunk_out),
-	HTTPS(stream_out),
-	HTTPS(connection_fail),
-	HTTPS(write_during_read),
-	HTTPS(connection),
-	HTTPS(persist_connection),
-#endif
-
 	END_OF_TESTCASES
 };
 
 struct testcase_t http_iocp_testcases[] = {
 	{ "simple", http_simple_test, TT_FORK|TT_NEED_BASE|TT_ENABLE_IOCP, &basic_setup, NULL },
-#ifdef EVENT__HAVE_OPENSSL
-	{ "https_simple", https_simple_test, TT_FORK|TT_NEED_BASE|TT_ENABLE_IOCP, &basic_setup, NULL },
-#endif
 	END_OF_TESTCASES
 };

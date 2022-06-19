@@ -35,9 +35,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -1234,16 +1232,8 @@ test_evbuffer_add_file(void *ptr)
 
 	/* Say that it drains to a fd so that we can use sendfile. */
 	evbuffer_set_flags(src, EVBUFFER_FLAG_DRAINS_TO_FD);
-
-#if defined(EVENT__HAVE_SENDFILE) && defined(__sun__) && defined(__svr4__)
-	/* We need to use a pair of AF_INET sockets, since Solaris
-	   doesn't support sendfile() over AF_UNIX. */
-	if (evutil_ersatz_socketpair_(AF_INET, SOCK_STREAM, 0, pair) == -1)
-		tt_abort_msg("ersatz_socketpair failed");
-#else
 	if (evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1)
 		tt_abort_msg("socketpair failed");
-#endif
 	evutil_make_socket_nonblocking(pair[0]);
 	evutil_make_socket_nonblocking(pair[1]);
 

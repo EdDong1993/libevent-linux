@@ -117,7 +117,7 @@ set(EVENT_VERSION
 	"${EVENT_VERSION_MAJOR}.${EVENT_VERSION_MINOR}.${EVENT_VERSION_PATCH}-${EVENT_STAGE_NAME}")
 
 option(EVENT__DISABLE_DEBUG_MODE
-    "Define if libevent should build without support for a debug mode" OFF)
+    "Define if libevent should build without support for a debug mode" ON)
 
 option(EVENT__ENABLE_VERBOSE_DEBUG
     "Enables verbose debugging" OFF)
@@ -129,7 +129,7 @@ option(EVENT__DISABLE_THREAD_SUPPORT
     "Define if libevent should not be compiled with thread support" OFF)
 
 option(EVENT__DISABLE_OPENSSL
-    "Define if libevent should build without support for OpenSSL encryption" OFF)
+    "Define if libevent should build without support for OpenSSL encryption" ON)
 
 option(EVENT__DISABLE_BENCHMARK
     "Defines if libevent should build without the benchmark executables" OFF)
@@ -234,33 +234,6 @@ else()
     message(FATAL_ERROR "${EVENT_LIBRARY_TYPE} is not supported")
 endif()
 
-if (${MSVC})
-    set(msvc_static_runtime OFF)
-    if ("${EVENT_LIBRARY_TYPE}" STREQUAL "STATIC")
-        set(msvc_static_runtime ON)
-    endif()
-
-    # For more info:
-    # - https://docs.microsoft.com/en-us/cpp/build/reference/md-mt-ld-use-run-time-library?view=vs-2017
-    # - https://gitlab.kitware.com/cmake/community/wikis/FAQ#how-can-i-build-my-msvc-application-with-a-static-runtime
-    option(EVENT__MSVC_STATIC_RUNTIME
-           "Link static runtime libraries"
-           ${msvc_static_runtime})
-
-    if (EVENT__MSVC_STATIC_RUNTIME)
-        foreach (flag_var
-                 CMAKE_C_FLAGS_DEBUG
-                 CMAKE_C_FLAGS_RELEASE
-                 CMAKE_C_FLAGS_MINSIZEREL
-                 CMAKE_C_FLAGS_RELWITHDEBINFO
-        )
-            if (${flag_var} MATCHES "/MD")
-                string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-            endif()
-        endforeach()
-    endif()
-endif()
-
 # GNUC specific options.
 if (${GNUC})
     option(EVENT__DISABLE_GCC_WARNINGS "Disable verbose warnings with GCC" OFF)
@@ -321,27 +294,6 @@ if (${GNUC})
     endif()
 
     add_compiler_flags(${__FLAGS})
-endif()
-
-if (APPLE)
-    # Get rid of deprecated warnings for OpenSSL on OSX 10.7 and greater.
-    add_compiler_flags(
-        -Wno-error=deprecated-declarations
-        -Qunused-arguments
-    )
-endif()
-
-if (MINGW OR CYGWIN)
-    set(WIN32 TRUE)
-endif()
-
-# Winsock.
-if(WIN32)
-    set(CMAKE_REQUIRED_LIBRARIES  ws2_32 shell32 advapi32)
-    set(CMAKE_REQUIRED_DEFINITIONS -FIwinsock2.h -FIws2tcpip.h -D_WIN32_WINNT=0x0600)
-endif()
-if (SOLARIS)
-    set(CMAKE_REQUIRED_LIBRARIES socket nsl)
 endif()
 
 # Check if _GNU_SOURCE is available.
@@ -753,7 +705,6 @@ set(HDR_PRIVATE
     evthread-internal.h
     ht-internal.h
     http-internal.h
-    iocp-internal.h
     ipv6-internal.h
     log-internal.h
     minheap-internal.h
@@ -761,7 +712,7 @@ set(HDR_PRIVATE
     ratelim-internal.h
     strlcpy-internal.h
     util-internal.h
-    evconfig-private.h
+    
     compat/sys/queue.h)
 
 set(HDR_COMPAT
@@ -816,28 +767,9 @@ set(SRC_CORE
     signal.c
     strlcpy.c)
 
-if(EVENT__HAVE_SELECT)
-    list(APPEND SRC_CORE select.c)
-endif()
-
-if(EVENT__HAVE_POLL)
-    list(APPEND SRC_CORE poll.c)
-endif()
-
-if(EVENT__HAVE_KQUEUE)
-    list(APPEND SRC_CORE kqueue.c)
-endif()
-
-if(EVENT__HAVE_DEVPOLL)
-    list(APPEND SRC_CORE devpoll.c)
-endif()
 
 if(EVENT__HAVE_EPOLL)
     list(APPEND SRC_CORE epoll.c)
-endif()
-
-if(EVENT__HAVE_EVENT_PORTS)
-    list(APPEND SRC_CORE evport.c)
 endif()
 
 if (NOT EVENT__DISABLE_OPENSSL)
@@ -896,28 +828,6 @@ include_directories(BEFORE ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/compat
     ${PROJECT_SOURCE_DIR}/include)
 
-if(WIN32)
-    list(APPEND SRC_CORE
-        buffer_iocp.c
-        bufferevent_async.c
-        event_iocp.c
-        win32select.c)
-
-    list(APPEND HDR_PRIVATE WIN32-Code/getopt.h)
-
-    set(EVENT__DNS_USE_FTIME_FOR_ID 1)
-    set(LIB_PLATFORM ws2_32 shell32 advapi32)
-    add_definitions(
-            -D_CRT_SECURE_NO_WARNINGS
-            -D_CRT_NONSTDC_NO_DEPRECATE)
-
-    include_directories(./WIN32-Code)
-endif()
-
-if (SOLARIS)
-    list(APPEND LIB_PLATFORM socket nsl)
-endif()
-
 source_group("Headers Private"  FILES ${HDR_PRIVATE})
 source_group("Header Compat"    FILES ${HDR_COMPAT})
 source_group("Headers Public"   FILES ${HDR_PUBLIC})
@@ -933,15 +843,6 @@ if (${GNUC})
 elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "SunPro")
     set(EVENT_SHARED_FLAGS -xldscope=hidden)
 endif()
-
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/event-config.h.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/include/event2/event-config.h
-        NEWLINE_STYLE UNIX)
-
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/evconfig-private.h.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/include/evconfig-private.h)
 
 #
 # Create the libraries.
@@ -1125,12 +1026,7 @@ if (NOT EVENT__DISABLE_TESTS)
                  test/regress_util.c
                  test/tinytest.c)
 
-            if (WIN32)
-                list(APPEND SRC_REGRESS test/regress_iocp.c)
-                if (NOT EVENT__DISABLE_THREAD_SUPPORT)
-                    list(APPEND SRC_REGRESS test/regress_thread.c)
-                endif()
-            elseif (EVENT__HAVE_PTHREADS)
+            if (EVENT__HAVE_PTHREADS)
                 list(APPEND SRC_REGRESS test/regress_thread.c)
             endif()
 
@@ -1209,30 +1105,6 @@ if (NOT EVENT__DISABLE_TESTS)
 
     if (EVENT__HAVE_EPOLL)
         list(APPEND BACKENDS EPOLL)
-    endif()
-
-    if (EVENT__HAVE_SELECT)
-        list(APPEND BACKENDS SELECT)
-    endif()
-
-    if (EVENT__HAVE_POLL)
-        list(APPEND BACKENDS POLL)
-    endif()
-
-    if (EVENT__HAVE_KQUEUE)
-        list(APPEND BACKENDS KQUEUE)
-    endif()
-
-    if (EVENT__HAVE_EVENT_PORTS)
-        list(APPEND BACKENDS EVPORT)
-    endif()
-
-    if (EVENT__HAVE_DEVPOLL)
-        list(APPEND BACKENDS DEVPOLL)
-    endif()
-
-    if (WIN32)
-        list(APPEND BACKENDS WIN32)
     endif()
 
 

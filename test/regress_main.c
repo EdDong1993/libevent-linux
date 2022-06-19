@@ -26,54 +26,16 @@
  */
 #include "util-internal.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
-#endif
-
-/* move_pthread_to_realtime_scheduling_class() */
-#ifdef EVENT__HAVE_MACH_MACH_H
-#include <mach/mach.h>
-#endif
-#ifdef EVENT__HAVE_MACH_MACH_TIME_H
-#include <mach/mach_time.h>
-#endif
-
-#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
-#if (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1060 && \
-    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1070)
-#define FORK_BREAKS_GCOV
-#include <vproc.h>
-#endif
-#endif
-
 #include "event2/event-config.h"
 
-#if 0
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
-#include <sys/queue.h>
-#include <signal.h>
-#include <errno.h>
-#endif
 
-#include <sys/types.h>
-#ifdef EVENT__HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif
-
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
 #include <netdb.h>
-#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -92,7 +54,6 @@
 #include "regress_thread.h"
 #include "tinytest.h"
 #include "tinytest_macros.h"
-#include "../iocp-internal.h"
 #include "../event-internal.h"
 #include "../evthread-internal.h"
 
@@ -136,9 +97,7 @@ regress_make_tmpfile(const void *data, size_t datalen, char **filename_out)
 	int fd;
 	*filename_out = NULL;
 	strcpy(tmpfilename, "/tmp/eventtmp.XXXXXX");
-#ifdef EVENT__HAVE_UMASK
 	umask(0077);
-#endif
 	fd = mkstemp(tmpfilename);
 	if (fd == -1)
 		return (-1);
@@ -293,12 +252,6 @@ basic_test_setup(const struct testcase_t *testcase)
 		if (!base)
 			exit(1);
 	}
-	if (testcase->flags & TT_ENABLE_IOCP_FLAG) {
-		if (event_base_start_iocp_(base, 0)<0) {
-			event_base_free(base);
-			return (void*)TT_SKIP;
-		}
-	}
 
 	if (testcase->flags & TT_NEED_DNS) {
 		evdns_set_log_fn(dnslogcb);
@@ -415,13 +368,6 @@ const struct testcase_setup_t legacy_setup = {
 
 /* ============================================================ */
 
-#if (!defined(EVENT__HAVE_PTHREADS) && !defined(_WIN32)) || defined(EVENT__DISABLE_THREAD_SUPPORT)
-struct testcase_t thread_testcases[] = {
-	{ "basic", NULL, TT_SKIP, NULL, NULL },
-	END_OF_TESTCASES
-};
-#endif
-
 struct testgroup_t testgroups[] = {
 	{ "main/", main_testcases },
 	{ "heap/", minheap_testcases },
@@ -437,15 +383,6 @@ struct testgroup_t testgroups[] = {
 	{ "rpc/", rpc_testcases },
 	{ "thread/", thread_testcases },
 	{ "listener/", listener_testcases },
-#ifdef _WIN32
-	{ "iocp/", iocp_testcases },
-	{ "iocp/bufferevent/", bufferevent_iocp_testcases },
-	{ "iocp/listener/", listener_iocp_testcases },
-	{ "iocp/http/", http_iocp_testcases },
-#endif
-#ifdef EVENT__HAVE_OPENSSL
-	{ "ssl/", ssl_testcases },
-#endif
 	END_OF_GROUPS
 };
 

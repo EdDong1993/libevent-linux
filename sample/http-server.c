@@ -15,32 +15,13 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-#include <getopt.h>
-#include <io.h>
-#include <fcntl.h>
-#ifndef S_ISDIR
-#define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
-#endif
-#else /* !_WIN32 */
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
-#endif /* _WIN32 */
 #include <signal.h>
-
-#ifdef EVENT__HAVE_SYS_UN_H
 #include <sys/un.h>
-#endif
-#ifdef EVENT__HAVE_AFUNIX_H
-#include <afunix.h>
-#endif
 
 #include <event2/event.h>
 #include <event2/http.h>
@@ -49,34 +30,8 @@
 #include <event2/util.h>
 #include <event2/keyvalq_struct.h>
 
-#ifdef _WIN32
-#include <event2/thread.h>
-#endif /* _WIN32 */
-
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-# ifdef _XOPEN_SOURCE_EXTENDED
-#  include <arpa/inet.h>
-# endif
-#endif
-
-#ifdef _WIN32
-#ifndef stat
-#define stat _stat
-#endif
-#ifndef fstat
-#define fstat _fstat
-#endif
-#ifndef open
-#define open _open
-#endif
-#ifndef close
-#define close _close
-#endif
-#ifndef O_RDONLY
-#define O_RDONLY _O_RDONLY
-#endif
-#endif /* _WIN32 */
+#include <arpa/inet.h>
 
 char uri_root[512];
 
@@ -416,12 +371,10 @@ display_listen_sock(struct evhttp_bound_socket *handle)
 		got_port = ntohs(((struct sockaddr_in6*)&ss)->sin6_port);
 		inaddr = &((struct sockaddr_in6*)&ss)->sin6_addr;
 	}
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_UN
 	else if (ss.ss_family == AF_UNIX) {
 		printf("Listening on <%s>\n", ((struct sockaddr_un*)&ss)->sun_path);
 		return 0;
 	}
-#endif
 	else {
 		fprintf(stderr, "Weird address family %d\n",
 		    ss.ss_family);
@@ -476,15 +429,6 @@ main(int argc, char **argv)
 		event_enable_debug_logging(EVENT_DBG_ALL);
 
 	cfg = event_config_new();
-#ifdef _WIN32
-	if (o.iocp) {
-#ifdef EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED
-		evthread_use_windows_threads();
-		event_config_set_num_cpus_hint(cfg, 8);
-#endif
-		event_config_set_flag(cfg, EVENT_BASE_FLAG_STARTUP_IOCP);
-	}
-#endif
 
 	base = event_base_new_with_config(cfg);
 	if (!base) {
@@ -509,7 +453,6 @@ main(int argc, char **argv)
 	evhttp_set_gencb(http, send_document_cb, &o);
 
 	if (o.unixsock) {
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_UN
 		struct sockaddr_un addr;
 
 		if (o.unlink && (unlink(o.unixsock) && errno != ENOENT)) {
@@ -536,11 +479,7 @@ main(int argc, char **argv)
 			ret = 1;
 			goto err;
 		}
-#else /* !EVENT__HAVE_STRUCT_SOCKADDR_UN */
-		fprintf(stderr, "-U is not supported on this platform. Exiting.\n");
-		ret = 1;
-		goto err;
-#endif /* EVENT__HAVE_STRUCT_SOCKADDR_UN */
+
 	}
 	else {
 		handle = evhttp_bind_socket_with_handle(http, "0.0.0.0", o.port);

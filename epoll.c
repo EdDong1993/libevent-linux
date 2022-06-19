@@ -25,16 +25,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef EVENT__HAVE_EPOLL
+
 
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/resource.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #include <sys/epoll.h>
 #include <signal.h>
@@ -44,12 +41,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIMERFD_H
 #include <sys/timerfd.h>
-#endif
 
 #include "event-internal.h"
 #include "evsignal-internal.h"
@@ -72,16 +65,7 @@
 
 #include "epolltable-internal.h"
 
-#if defined(EVENT__HAVE_SYS_TIMERFD_H) &&			  \
-	defined(EVENT__HAVE_TIMERFD_CREATE) &&			  \
-	defined(HAVE_POSIX_MONOTONIC) && defined(TFD_NONBLOCK) && \
-	defined(TFD_CLOEXEC)
-/* Note that we only use timerfd if TFD_NONBLOCK and TFD_CLOEXEC are available
-   and working.  This means that we can't support it on 2.6.25 (where timerfd
-   was introduced) or 2.6.26, since 2.6.27 introduced those flags.
- */
 #define USING_TIMERFD
-#endif
 
 struct epollop {
 	struct epoll_event *events;
@@ -143,10 +127,8 @@ epoll_init(struct event_base *base)
 	int epfd = -1;
 	struct epollop *epollop;
 
-#ifdef EVENT__HAVE_EPOLL_CREATE1
 	/* First, try the shiny new epoll_create1 interface, if we have it. */
 	epfd = epoll_create1(EPOLL_CLOEXEC);
-#endif
 	if (epfd == -1) {
 		/* Initialize the kernel queue using the old interface.  (The
 		size field is ignored   since 2.6.8.) */
@@ -542,4 +524,3 @@ epoll_dealloc(struct event_base *base)
 	mm_free(epollop);
 }
 
-#endif /* EVENT__HAVE_EPOLL */

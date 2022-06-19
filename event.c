@@ -25,36 +25,22 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
+
 #include <sys/types.h>
-#if !defined(_WIN32) && defined(EVENT__HAVE_SYS_TIME_H)
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
 #include <time.h>
 #include <limits.h>
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
 
 #include "event2/event.h"
 #include "event2/event_struct.h"
@@ -66,62 +52,16 @@
 #include "event2/util.h"
 #include "log-internal.h"
 #include "evmap-internal.h"
-#include "iocp-internal.h"
 #include "changelist-internal.h"
 #define HT_NO_CACHE_HASH_VALUES
 #include "ht-internal.h"
 #include "util-internal.h"
 
-
-#ifdef EVENT__HAVE_WORKING_KQUEUE
-#include "kqueue-internal.h"
-#endif
-
-#ifdef EVENT__HAVE_EVENT_PORTS
-extern const struct eventop evportops;
-#endif
-#ifdef EVENT__HAVE_SELECT
-extern const struct eventop selectops;
-#endif
-#ifdef EVENT__HAVE_POLL
-extern const struct eventop pollops;
-#endif
-#ifdef EVENT__HAVE_EPOLL
 extern const struct eventop epollops;
-#endif
-#ifdef EVENT__HAVE_WORKING_KQUEUE
-extern const struct eventop kqops;
-#endif
-#ifdef EVENT__HAVE_DEVPOLL
-extern const struct eventop devpollops;
-#endif
-#ifdef _WIN32
-extern const struct eventop win32ops;
-#endif
 
 /* Array of backends in order of preference. */
 static const struct eventop *eventops[] = {
-#ifdef EVENT__HAVE_EVENT_PORTS
-	&evportops,
-#endif
-#ifdef EVENT__HAVE_WORKING_KQUEUE
-	&kqops,
-#endif
-#ifdef EVENT__HAVE_EPOLL
 	&epollops,
-#endif
-#ifdef EVENT__HAVE_DEVPOLL
-	&devpollops,
-#endif
-#ifdef EVENT__HAVE_POLL
-	&pollops,
-#endif
-#ifdef EVENT__HAVE_SELECT
-	&selectops,
-#endif
-#ifdef _WIN32
-	&win32ops,
-#endif
 	NULL
 };
 
@@ -168,226 +108,6 @@ static int	evthread_notify_base(struct event_base *base);
 static void insert_common_timeout_inorder(struct common_timeout_list *ctl,
     struct event *ev);
 
-#ifndef EVENT__DISABLE_DEBUG_MODE
-/* These functions implement a hashtable of which 'struct event *' structures
- * have been setup or added.  We don't want to trust the content of the struct
- * event itself, since we're trying to work through cases where an event gets
- * clobbered or freed.  Instead, we keep a hashtable indexed by the pointer.
- */
-
-struct event_debug_entry {
-	HT_ENTRY(event_debug_entry) node;
-	const struct event *ptr;
-	unsigned added : 1;
-};
-
-static inline unsigned
-hash_debug_entry(const struct event_debug_entry *e)
-{
-	/* We need to do this silliness to convince compilers that we
-	 * honestly mean to cast e->ptr to an integer, and discard any
-	 * part of it that doesn't fit in an unsigned.
-	 */
-	unsigned u = (unsigned) ((ev_uintptr_t) e->ptr);
-	/* Our hashtable implementation is pretty sensitive to low bits,
-	 * and every struct event is over 64 bytes in size, so we can
-	 * just say >>6. */
-	return (u >> 6);
-}
-
-static inline int
-eq_debug_entry(const struct event_debug_entry *a,
-    const struct event_debug_entry *b)
-{
-	return a->ptr == b->ptr;
-}
-
-int event_debug_mode_on_ = 0;
-
-
-#if !defined(EVENT__DISABLE_THREAD_SUPPORT) && !defined(EVENT__DISABLE_DEBUG_MODE)
-/**
- * @brief debug mode variable which is set for any function/structure that needs
- *        to be shared across threads (if thread support is enabled).
- *
- *        When and if evthreads are initialized, this variable will be evaluated,
- *        and if set to something other than zero, this means the evthread setup 
- *        functions were called out of order.
- *
- *        See: "Locks and threading" in the documentation.
- */
-int event_debug_created_threadable_ctx_ = 0;
-#endif
-
-/* Set if it's too late to enable event_debug_mode. */
-static int event_debug_mode_too_late = 0;
-#ifndef EVENT__DISABLE_THREAD_SUPPORT
-static void *event_debug_map_lock_ = NULL;
-#endif
-static HT_HEAD(event_debug_map, event_debug_entry) global_debug_map =
-	HT_INITIALIZER();
-
-HT_PROTOTYPE(event_debug_map, event_debug_entry, node, hash_debug_entry,
-    eq_debug_entry)
-HT_GENERATE(event_debug_map, event_debug_entry, node, hash_debug_entry,
-    eq_debug_entry, 0.5, mm_malloc, mm_realloc, mm_free)
-
-/* record that ev is now setup (that is, ready for an add) */
-static void event_debug_note_setup_(const struct event *ev)
-{
-	struct event_debug_entry *dent, find;
-
-	if (!event_debug_mode_on_)
-		goto out;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_FIND(event_debug_map, &global_debug_map, &find);
-	if (dent) {
-		dent->added = 0;
-	} else {
-		dent = mm_malloc(sizeof(*dent));
-		if (!dent)
-			event_err(1,
-			    "Out of memory in debugging code");
-		dent->ptr = ev;
-		dent->added = 0;
-		HT_INSERT(event_debug_map, &global_debug_map, dent);
-	}
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-
-out:
-	event_debug_mode_too_late = 1;
-}
-/* record that ev is no longer setup */
-static void event_debug_note_teardown_(const struct event *ev)
-{
-	struct event_debug_entry *dent, find;
-
-	if (!event_debug_mode_on_)
-		goto out;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_REMOVE(event_debug_map, &global_debug_map, &find);
-	if (dent)
-		mm_free(dent);
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-
-out:
-	event_debug_mode_too_late = 1;
-}
-/* Macro: record that ev is now added */
-static void event_debug_note_add_(const struct event *ev)
-{
-	struct event_debug_entry *dent,find;
-
-	if (!event_debug_mode_on_)
-		goto out;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_FIND(event_debug_map, &global_debug_map, &find);
-	if (dent) {
-		dent->added = 1;
-	} else {
-		event_errx(EVENT_ERR_ABORT_,
-		    "%s: noting an add on a non-setup event %p"
-		    " (events: 0x%x, fd: "EV_SOCK_FMT
-		    ", flags: 0x%x)",
-		    __func__, ev, ev->ev_events,
-		    EV_SOCK_ARG(ev->ev_fd), ev->ev_flags);
-	}
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-
-out:
-	event_debug_mode_too_late = 1;
-}
-/* record that ev is no longer added */
-static void event_debug_note_del_(const struct event *ev)
-{
-	struct event_debug_entry *dent, find;
-
-	if (!event_debug_mode_on_)
-		goto out;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_FIND(event_debug_map, &global_debug_map, &find);
-	if (dent) {
-		dent->added = 0;
-	} else {
-		event_errx(EVENT_ERR_ABORT_,
-		    "%s: noting a del on a non-setup event %p"
-		    " (events: 0x%x, fd: "EV_SOCK_FMT
-		    ", flags: 0x%x)",
-		    __func__, ev, ev->ev_events,
-		    EV_SOCK_ARG(ev->ev_fd), ev->ev_flags);
-	}
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-
-out:
-	event_debug_mode_too_late = 1;
-}
-/* assert that ev is setup (i.e., okay to add or inspect) */
-static void event_debug_assert_is_setup_(const struct event *ev)
-{
-	struct event_debug_entry *dent, find;
-
-	if (!event_debug_mode_on_)
-		return;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_FIND(event_debug_map, &global_debug_map, &find);
-	if (!dent) {
-		event_errx(EVENT_ERR_ABORT_,
-		    "%s called on a non-initialized event %p"
-		    " (events: 0x%x, fd: "EV_SOCK_FMT
-		    ", flags: 0x%x)",
-		    __func__, ev, ev->ev_events,
-		    EV_SOCK_ARG(ev->ev_fd), ev->ev_flags);
-	}
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-}
-/* assert that ev is not added (i.e., okay to tear down or set up again) */
-static void event_debug_assert_not_added_(const struct event *ev)
-{
-	struct event_debug_entry *dent, find;
-
-	if (!event_debug_mode_on_)
-		return;
-
-	find.ptr = ev;
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	dent = HT_FIND(event_debug_map, &global_debug_map, &find);
-	if (dent && dent->added) {
-		event_errx(EVENT_ERR_ABORT_,
-		    "%s called on an already added event %p"
-		    " (events: 0x%x, fd: "EV_SOCK_FMT", "
-		    "flags: 0x%x)",
-		    __func__, ev, ev->ev_events,
-		    EV_SOCK_ARG(ev->ev_fd), ev->ev_flags);
-	}
-	EVLOCK_UNLOCK(event_debug_map_lock_, 0);
-}
-static void event_debug_assert_socket_nonblocking_(evutil_socket_t fd)
-{
-	if (!event_debug_mode_on_)
-		return;
-	if (fd < 0)
-		return;
-
-#ifndef _WIN32
-	{
-		int flags;
-		if ((flags = fcntl(fd, F_GETFL, NULL)) >= 0) {
-			EVUTIL_ASSERT(flags & O_NONBLOCK);
-		}
-	}
-#endif
-}
-#else
 static void event_debug_note_setup_(const struct event *ev) { (void)ev; }
 static void event_debug_note_teardown_(const struct event *ev) { (void)ev; }
 static void event_debug_note_add_(const struct event *ev) { (void)ev; }
@@ -395,7 +115,6 @@ static void event_debug_note_del_(const struct event *ev) { (void)ev; }
 static void event_debug_assert_is_setup_(const struct event *ev) { (void)ev; }
 static void event_debug_assert_not_added_(const struct event *ev) { (void)ev; }
 static void event_debug_assert_socket_nonblocking_(evutil_socket_t fd) { (void)fd; }
-#endif
 
 #define EVENT_BASE_ASSERT_LOCKED(base)		\
 	EVLOCK_ASSERT_LOCKED((base)->th_base_lock)
@@ -419,7 +138,7 @@ gettime(struct event_base *base, struct timeval *tp)
 		return (0);
 	}
 
-	if (evutil_gettime_monotonic_(&base->monotonic_timer, tp) == -1) {
+	if (evutil_gettime_monotonic(&base->monotonic_timer, tp) == -1) {
 		return -1;
 	}
 
@@ -569,36 +288,11 @@ event_base_get_features(const struct event_base *base)
 void
 event_enable_debug_mode(void)
 {
-#ifndef EVENT__DISABLE_DEBUG_MODE
-	if (event_debug_mode_on_)
-		event_errx(1, "%s was called twice!", __func__);
-	if (event_debug_mode_too_late)
-		event_errx(1, "%s must be called *before* creating any events "
-		    "or event_bases",__func__);
-
-	event_debug_mode_on_ = 1;
-
-	HT_INIT(event_debug_map, &global_debug_map);
-#endif
 }
 
 void
 event_disable_debug_mode(void)
 {
-#ifndef EVENT__DISABLE_DEBUG_MODE
-	struct event_debug_entry **ent, *victim;
-
-	EVLOCK_LOCK(event_debug_map_lock_, 0);
-	for (ent = HT_START(event_debug_map, &global_debug_map); ent; ) {
-		victim = *ent;
-		ent = HT_NEXT_RMV(event_debug_map, &global_debug_map, ent);
-		mm_free(victim);
-	}
-	HT_CLEAR(event_debug_map, &global_debug_map);
-	EVLOCK_UNLOCK(event_debug_map_lock_ , 0);
-
-	event_debug_mode_on_  = 0;
-#endif
 }
 
 struct event_base *
@@ -607,10 +301,6 @@ event_base_new_with_config(const struct event_config *cfg)
 	int i;
 	struct event_base *base;
 	int should_check_environment;
-
-#ifndef EVENT__DISABLE_DEBUG_MODE
-	event_debug_mode_too_late = 1;
-#endif
 
 	if ((base = mm_calloc(1, sizeof(struct event_base))) == NULL) {
 		event_warn("%s: calloc", __func__);
@@ -635,7 +325,7 @@ event_base_new_with_config(const struct event_config *cfg)
 			}
 		}
 		flags = precise_time ? EV_MONOT_PRECISE : 0;
-		evutil_configure_monotonic_time_(&base->monotonic_timer, flags);
+		evutil_configure_monotonic_time(&base->monotonic_timer, flags);
 
 		gettime(base, &tmp);
 	}
@@ -713,10 +403,6 @@ event_base_new_with_config(const struct event_config *cfg)
 
 	/* prepare for threading */
 
-#if !defined(EVENT__DISABLE_THREAD_SUPPORT) && !defined(EVENT__DISABLE_DEBUG_MODE)
-	event_debug_created_threadable_ctx_ = 1;
-#endif
-
 #ifndef EVENT__DISABLE_THREAD_SUPPORT
 	if (EVTHREAD_LOCKING_ENABLED() &&
 	    (!cfg || !(cfg->flags & EVENT_BASE_FLAG_NOLOCK))) {
@@ -732,43 +418,7 @@ event_base_new_with_config(const struct event_config *cfg)
 	}
 #endif
 
-#ifdef _WIN32
-	if (cfg && (cfg->flags & EVENT_BASE_FLAG_STARTUP_IOCP))
-		event_base_start_iocp_(base, cfg->n_cpus_hint);
-#endif
-
 	return (base);
-}
-
-int
-event_base_start_iocp_(struct event_base *base, int n_cpus)
-{
-#ifdef _WIN32
-	if (base->iocp)
-		return 0;
-	base->iocp = event_iocp_port_launch_(n_cpus);
-	if (!base->iocp) {
-		event_warnx("%s: Couldn't launch IOCP", __func__);
-		return -1;
-	}
-	return 0;
-#else
-	return -1;
-#endif
-}
-
-void
-event_base_stop_iocp_(struct event_base *base)
-{
-#ifdef _WIN32
-	int rv;
-
-	if (!base->iocp)
-		return;
-	rv = event_iocp_shutdown_(base->iocp, -1);
-	EVUTIL_ASSERT(rv >= 0);
-	base->iocp = NULL;
-#endif
 }
 
 static int
@@ -852,10 +502,6 @@ event_base_free_(struct event_base *base, int run_finalizers)
 		return;
 	}
 	/* XXX(niels) - check for internal events first */
-
-#ifdef _WIN32
-	event_base_stop_iocp_(base);
-#endif
 
 	/* threading fds if we have them */
 	if (base->th_notify_fd[0] != -1) {
@@ -1093,7 +739,7 @@ event_gettime_monotonic(struct event_base *base, struct timeval *tv)
 
   if (base && tv) {
     EVBASE_ACQUIRE_LOCK(base, th_base_lock);
-    rv = evutil_gettime_monotonic_(&(base->monotonic_timer), tv);
+    rv = evutil_gettime_monotonic(&(base->monotonic_timer), tv);
     EVBASE_RELEASE_LOCK(base, th_base_lock);
   }
 
@@ -2517,7 +2163,6 @@ evthread_notify_base_default(struct event_base *base)
 	return (r < 0 && ! EVUTIL_ERR_IS_EAGAIN(errno)) ? -1 : 0;
 }
 
-#ifdef EVENT__HAVE_EVENTFD
 /* Helper callback: wake an event_base from another thread.  This version
  * assumes that you have a working eventfd() implementation. */
 static int
@@ -2531,7 +2176,6 @@ evthread_notify_base_eventfd(struct event_base *base)
 
 	return (r < 0) ? -1 : 0;
 }
-#endif
 
 
 /** Tell the thread currently running the event_loop for base (if any) that it
@@ -3508,11 +3152,6 @@ event_mm_calloc_(size_t count, size_t size)
 			return memset(p, 0, sz);
 	} else {
 		void *p = calloc(count, size);
-#ifdef _WIN32
-		/* Windows calloc doesn't reliably set ENOMEM */
-		if (p == NULL)
-			goto error;
-#endif
 		return p;
 	}
 
@@ -3578,7 +3217,6 @@ event_set_mem_functions(void *(*malloc_fn)(size_t sz),
 }
 #endif
 
-#ifdef EVENT__HAVE_EVENTFD
 static void
 evthread_notify_drain_eventfd(evutil_socket_t fd, short what, void *arg)
 {
@@ -3594,7 +3232,6 @@ evthread_notify_drain_eventfd(evutil_socket_t fd, short what, void *arg)
 	base->is_notify_pending = 0;
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 }
-#endif
 
 static void
 evthread_notify_drain_default(evutil_socket_t fd, short what, void *arg)
@@ -3638,16 +3275,6 @@ evthread_make_base_notifiable_nolock_(struct event_base *base)
 		return 0;
 	}
 
-#if defined(EVENT__HAVE_WORKING_KQUEUE)
-	if (base->evsel == &kqops && event_kq_add_notify_event_(base) == 0) {
-		base->th_notify_fn = event_kq_notify_base_;
-		/* No need to add an event here; the backend can wake
-		 * itself up just fine. */
-		return 0;
-	}
-#endif
-
-#ifdef EVENT__HAVE_EVENTFD
 	base->th_notify_fd[0] = evutil_eventfd_(0,
 	    EVUTIL_EFD_CLOEXEC|EVUTIL_EFD_NONBLOCK);
 	if (base->th_notify_fd[0] >= 0) {
@@ -3655,7 +3282,6 @@ evthread_make_base_notifiable_nolock_(struct event_base *base)
 		notify = evthread_notify_base_eventfd;
 		cb = evthread_notify_drain_eventfd;
 	} else
-#endif
 	if (evutil_make_internal_pipe_(base->th_notify_fd) == 0) {
 		notify = evthread_notify_base_default;
 		cb = evthread_notify_drain_default;
@@ -3890,15 +3516,6 @@ event_base_del_virtual_(struct event_base *base)
 static void
 event_free_debug_globals_locks(void)
 {
-#ifndef EVENT__DISABLE_THREAD_SUPPORT
-#ifndef EVENT__DISABLE_DEBUG_MODE
-	if (event_debug_map_lock_ != NULL) {
-		EVTHREAD_FREE_LOCK(event_debug_map_lock_, 0);
-		event_debug_map_lock_ = NULL;
-		evthreadimpl_disable_lock_debugging_();
-	}
-#endif /* EVENT__DISABLE_DEBUG_MODE */
-#endif /* EVENT__DISABLE_THREAD_SUPPORT */
 	return;
 }
 
@@ -3939,9 +3556,6 @@ libevent_global_shutdown(void)
 int
 event_global_setup_locks_(const int enable_locks)
 {
-#ifndef EVENT__DISABLE_DEBUG_MODE
-	EVTHREAD_SETUP_GLOBAL_LOCK(event_debug_map_lock_, 0);
-#endif
 	if (evsig_global_setup_locks_(enable_locks) < 0)
 		return -1;
 	if (evutil_global_setup_locks_(enable_locks) < 0)

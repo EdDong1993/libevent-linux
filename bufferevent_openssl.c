@@ -30,28 +30,17 @@
 #endif
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #include <sys/types.h>
 
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_STDARG_H
 #include <stdarg.h>
-#endif
-#ifdef EVENT__HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 
 #include "event2/bufferevent.h"
 #include "event2/bufferevent_struct.h"

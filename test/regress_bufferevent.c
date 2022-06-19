@@ -51,9 +51,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -70,11 +68,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-
-#ifdef EVENT__HAVE_ARPA_INET_H
 #include <arpa/inet.h>
-#endif
-
 #include "event2/event-config.h"
 #include "event2/event.h"
 #include "event2/event_struct.h"
@@ -90,9 +84,6 @@
 #include "bufferevent-internal.h"
 #include "evthread-internal.h"
 #include "util-internal.h"
-#ifdef _WIN32
-#include "iocp-internal.h"
-#endif
 
 #include "regress.h"
 #include "regress_testutils.h"
@@ -1407,11 +1398,7 @@ struct testcase_t bufferevent_testcases[] = {
 	{ "bufferevent_trigger_defer_postpone", test_bufferevent_trigger,
 	  TT_FORK|TT_NEED_BASE|TT_NEED_THREADS, &basic_setup,
 	  (void*)"defer postpone" },
-#ifdef EVENT__HAVE_LIBZ
-	LEGACY(bufferevent_zlib, TT_ISOLATED),
-#else
 	{ "bufferevent_zlib", NULL, TT_SKIP, NULL, NULL },
-#endif
 
 	{ "bufferevent_connect_fail_eventcb_defer",
 	  test_bufferevent_connect_fail_eventcb,

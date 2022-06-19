@@ -49,7 +49,7 @@
  */
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #include <sys/types.h>
 
@@ -59,31 +59,16 @@
 
 #include <string.h>
 #include <fcntl.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-#ifdef EVENT__HAVE_STDINT_H
 #include <stdint.h>
-#endif
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <limits.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdarg.h>
-#ifdef _WIN32
-#include <winsock2.h>
-#include <winerror.h>
-#include <ws2tcpip.h>
-#ifndef _WIN32_IE
-#define _WIN32_IE 0x400
-#endif
-#include <shlobj.h>
-#endif
 
 #include "event2/dns.h"
 #include "event2/dns_struct.h"
@@ -100,29 +85,13 @@
 #include "ipv6-internal.h"
 #include "util-internal.h"
 #include "evthread-internal.h"
-#ifdef _WIN32
-#include <ctype.h>
-#include <winsock2.h>
-#include <windows.h>
-#include <iphlpapi.h>
-#include <io.h>
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
-
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
 
 #define EVDNS_LOG_DEBUG EVENT_LOG_DEBUG
 #define EVDNS_LOG_WARN EVENT_LOG_WARN
 #define EVDNS_LOG_MSG EVENT_LOG_MSG
-
-#ifndef HOST_NAME_MAX
-#define HOST_NAME_MAX 255
-#endif
 
 #include <stdio.h>
 
@@ -3358,28 +3327,6 @@ evdns_resolv_set_defaults(struct evdns_base *base, int flags) {
 	if (add_default)
 		evdns_base_nameserver_ip_add(base, "127.0.0.1");
 }
-
-#ifndef EVENT__HAVE_STRTOK_R
-static char *
-strtok_r(char *s, const char *delim, char **state) {
-	char *cp, *start;
-	start = cp = s ? s : *state;
-	if (!cp)
-		return NULL;
-	while (*cp && !strchr(delim, *cp))
-		++cp;
-	if (!*cp) {
-		if (cp == start)
-			return NULL;
-		*state = NULL;
-		return start;
-	} else {
-		*cp++ = '\0';
-		*state = cp;
-		return start;
-	}
-}
-#endif
 
 /* helper version of atoi which returns -1 on error */
 static int

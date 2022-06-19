@@ -38,7 +38,7 @@
  */
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #ifdef _WIN32
 #include <winsock2.h>

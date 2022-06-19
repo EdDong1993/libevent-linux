@@ -25,7 +25,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -38,9 +38,7 @@
 #ifndef _WIN32
 #include <sys/socket.h>
 #endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #include <time.h>
 #include <sys/queue.h>
@@ -41,6 +41,7 @@ extern "C" {
 #include "evsignal-internal.h"
 #include "mm-internal.h"
 #include "defer-internal.h"
+#include "time-internal.h"
 
 /* map union members back */
 
@@ -186,13 +187,7 @@ struct event_changelist {
 	int changes_size;
 };
 
-#ifndef EVENT__DISABLE_DEBUG_MODE
-/* Global internal flag: set to one if debug mode is on. */
-extern int event_debug_mode_on_;
-#define EVENT_DEBUG_MODE_IS_ON() (event_debug_mode_on_)
-#else
 #define EVENT_DEBUG_MODE_IS_ON() (0)
-#endif
 
 TAILQ_HEAD(evcallback_list, event_callback);
 
@@ -313,11 +308,6 @@ struct event_base {
 #endif
 	/** The event whose callback is executing right now */
 	struct event_callback *current_event;
-
-#ifdef _WIN32
-	/** IOCP support structure, if IOCP is enabled. */
-	struct event_iocp_port *iocp;
-#endif
 
 	/** Flags that this base was configured with */
 	enum event_base_config_flag flags;

@@ -35,23 +35,14 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <signal.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
-#ifdef HAVE_NETDB_H
 #include <netdb.h>
-#endif
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>

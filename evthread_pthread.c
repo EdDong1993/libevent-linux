@@ -24,7 +24,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 /* With glibc we need to define _GNU_SOURCE to get PTHREAD_MUTEX_RECURSIVE.
  * This comes from evconfig-private.h
@@ -87,15 +87,8 @@ evthread_posix_get_id(void)
 {
 	union {
 		pthread_t thr;
-#if EVENT__SIZEOF_PTHREAD_T > EVENT__SIZEOF_LONG
-		ev_uint64_t id;
-#else
 		unsigned long id;
-#endif
 	} r;
-#if EVENT__SIZEOF_PTHREAD_T < EVENT__SIZEOF_LONG
-	memset(&r, 0, sizeof(r));
-#endif
 	r.thr = pthread_self();
 	return (unsigned long)r.id;
 }

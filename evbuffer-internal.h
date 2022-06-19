@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 #include "event2/util.h"
 #include "event2/event_struct.h"
 #include "util-internal.h"
@@ -48,14 +48,7 @@ extern "C" {
 #endif
 #include <sys/queue.h>
 
-/* Minimum allocation for a chain.  We define this so that we're burning no
- * more than 5% of each allocation on overhead.  It would be nice to lose even
- * less space, though. */
-#if EVENT__SIZEOF_VOID_P < 8
-#define MIN_BUFFER_SIZE	512
-#else
 #define MIN_BUFFER_SIZE	1024
-#endif
 
 /** A single evbuffer callback for an evbuffer. This function will be invoked
  * when bytes are added to or removed from the evbuffer. */
@@ -155,17 +148,8 @@ struct evbuffer {
 	struct bufferevent *parent;
 };
 
-#if EVENT__SIZEOF_OFF_T < EVENT__SIZEOF_SIZE_T
-typedef ev_ssize_t ev_misalign_t;
-#define EVBUFFER_CHAIN_MAX ((size_t)EV_SSIZE_MAX)
-#else
 typedef ev_off_t ev_misalign_t;
-#if EVENT__SIZEOF_OFF_T > EVENT__SIZEOF_SIZE_T
-#define EVBUFFER_CHAIN_MAX EV_SIZE_MAX
-#else
 #define EVBUFFER_CHAIN_MAX ((size_t)EV_SSIZE_MAX)
-#endif
-#endif
 
 /** A single item in an evbuffer. */
 struct evbuffer_chain {
@@ -331,8 +315,6 @@ int evbuffer_read_setup_vecs_(struct evbuffer *buf, ev_ssize_t howmuch,
 		(i)->buf = (ei)->iov_base;		\
 		(i)->len = (unsigned long)(ei)->iov_len;	\
 	} while (0)
-/* XXXX the cast above is safe for now, but not if we allow mmaps on win64.
- * See note in buffer_iocp's launch_write function */
 
 /** Set the parent bufferevent object for buf to bev */
 void evbuffer_set_parent_(struct evbuffer *buf, struct bufferevent *bev);

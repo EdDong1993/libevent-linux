@@ -26,22 +26,12 @@
 
 #include "event2/event-config.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-#ifdef EVENT__HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
 
 #include "event2/event.h"
 #include "event2/bufferevent.h"
@@ -50,11 +40,7 @@
 
 /* Number of requests to make. Setting this too high might result in the machine
    running out of ephemeral ports */
-#ifdef _WIN32
-#define MAX_REQUESTS 1000
-#else
 #define MAX_REQUESTS 4000
-#endif
 
 /* Provide storage for the address, both for the server & the clients */
 static struct sockaddr_in saddr;
@@ -222,7 +208,6 @@ start_client(struct event_base *base)
 int
 main(int argc, char **argv)
 {
-#ifdef EVENT__HAVE_SETRLIMIT
 	/* Set the fd limit to a low value so that any fd leak is caught without
 	making many requests. */
 	struct rlimit rl;
@@ -231,12 +216,6 @@ main(int argc, char **argv)
 		my_perror("setrlimit");
 		exit(3);
 	}
-#endif
-
-#ifdef _WIN32
-	WSADATA WSAData;
-	WSAStartup(0x101, &WSAData);
-#endif
 
 	/* Set up an address, used by both client & server. */
 	memset(&saddr, 0, sizeof(saddr));

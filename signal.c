@@ -27,33 +27,18 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
 #include <sys/types.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <errno.h>
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
 
 #include "event2/event.h"
 #include "event2/event_struct.h"
@@ -214,11 +199,7 @@ int
 evsig_set_handler_(struct event_base *base,
     int evsignal, void (__cdecl *handler)(int))
 {
-#ifdef EVENT__HAVE_SIGACTION
 	struct sigaction sa;
-#else
-	ev_sighandler_t sh;
-#endif
 	struct evsig_info *sig = &base->sig;
 	void *p;
 
@@ -251,7 +232,6 @@ evsig_set_handler_(struct event_base *base,
 	}
 
 	/* save previous handler and setup new handler */
-#ifdef EVENT__HAVE_SIGACTION
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = handler;
 	sa.sa_flags |= SA_RESTART;
@@ -263,15 +243,6 @@ evsig_set_handler_(struct event_base *base,
 		sig->sh_old[evsignal] = NULL;
 		return (-1);
 	}
-#else
-	if ((sh = signal(evsignal, handler)) == SIG_ERR) {
-		event_warn("signal");
-		mm_free(sig->sh_old[evsignal]);
-		sig->sh_old[evsignal] = NULL;
-		return (-1);
-	}
-	*sig->sh_old[evsignal] = sh;
-#endif
 
 	return (0);
 }
@@ -327,11 +298,7 @@ evsig_restore_handler_(struct event_base *base, int evsignal)
 {
 	int ret = 0;
 	struct evsig_info *sig = &base->sig;
-#ifdef EVENT__HAVE_SIGACTION
 	struct sigaction *sh;
-#else
-	ev_sighandler_t *sh;
-#endif
 
 	if (evsignal >= sig->sh_old_max) {
 		/* Can't actually restore. */
@@ -342,17 +309,10 @@ evsig_restore_handler_(struct event_base *base, int evsignal)
 	/* restore previous handler */
 	sh = sig->sh_old[evsignal];
 	sig->sh_old[evsignal] = NULL;
-#ifdef EVENT__HAVE_SIGACTION
 	if (sigaction(evsignal, sh, NULL) == -1) {
 		event_warn("sigaction");
 		ret = -1;
 	}
-#else
-	if (signal(evsignal, *sh) == SIG_ERR) {
-		event_warn("signal");
-		ret = -1;
-	}
-#endif
 
 	mm_free(sh);
 
@@ -379,9 +339,6 @@ static void __cdecl
 evsig_handler(int sig)
 {
 	int save_errno = errno;
-#ifdef _WIN32
-	int socket_errno = EVUTIL_SOCKET_ERROR();
-#endif
 	ev_uint8_t msg;
 
 	if (evsig_base == NULL) {
@@ -391,24 +348,13 @@ evsig_handler(int sig)
 		return;
 	}
 
-#ifndef EVENT__HAVE_SIGACTION
-	signal(sig, evsig_handler);
-#endif
-
 	/* Wake up our notification mechanism */
 	msg = sig;
-#ifdef _WIN32
-	send(evsig_base_fd, (char*)&msg, 1, 0);
-#else
 	{
 		int r = write(evsig_base_fd, (char*)&msg, 1);
 		(void)r; /* Suppress 'unused return value' and 'unused var' */
 	}
-#endif
 	errno = save_errno;
-#ifdef _WIN32
-	EVUTIL_SET_SOCKET_ERROR(socket_errno);
-#endif
 }
 
 void

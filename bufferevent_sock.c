@@ -27,39 +27,21 @@
  */
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
+
 
 #include <sys/types.h>
 
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_STDARG_H
 #include <stdarg.h>
-#endif
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
 
 #include "event2/util.h"
 #include "event2/bufferevent.h"
@@ -71,9 +53,6 @@
 #include "mm-internal.h"
 #include "bufferevent-internal.h"
 #include "util-internal.h"
-#ifdef _WIN32
-#include "iocp-internal.h"
-#endif
 
 /* prototypes */
 static int be_socket_enable(struct bufferevent *, short);
@@ -347,11 +326,6 @@ bufferevent_socket_new(struct event_base *base, evutil_socket_t fd,
 	struct bufferevent_private *bufev_p;
 	struct bufferevent *bufev;
 
-#ifdef _WIN32
-	if (base && event_base_get_iocp_(base))
-		return bufferevent_async_new_(base, fd, options);
-#endif
-
 	if ((bufev_p = mm_calloc(1, sizeof(struct bufferevent_private)))== NULL)
 		return NULL;
 
@@ -400,30 +374,10 @@ bufferevent_socket_connect(struct bufferevent *bev,
 		ownfd = 1;
 	}
 	if (sa) {
-#ifdef _WIN32
-		if (bufferevent_async_can_connect_(bev)) {
-			bufferevent_setfd(bev, fd);
-			r = bufferevent_async_connect_(bev, fd, sa, socklen);
-			if (r < 0)
-				goto freesock;
-			bufev_p->connecting = 1;
-			result = 0;
-			goto done;
-		} else
-#endif
 		r = evutil_socket_connect_(&fd, sa, socklen);
 		if (r < 0)
 			goto freesock;
 	}
-#ifdef _WIN32
-	/* ConnectEx() isn't always around, even when IOCP is enabled.
-	 * Here, we borrow the socket object's write handler to fall back
-	 * on a non-blocking connect() when ConnectEx() is unavailable. */
-	if (BEV_IS_ASYNC(bev)) {
-		event_assign(&bev->ev_write, bev->ev_base, fd,
-		    EV_WRITE|EV_PERSIST|EV_FINALIZE, bufferevent_writecb, bev);
-	}
-#endif
 	bufferevent_setfd(bev, fd);
 	if (r == 0) {
 		if (! be_socket_enable(bev, EV_WRITE)) {

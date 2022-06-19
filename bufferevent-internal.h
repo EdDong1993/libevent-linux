@@ -32,7 +32,7 @@ extern "C" {
 
 #include "event2/event-config.h"
 #include "event2/event_struct.h"
-#include "evconfig-private.h"
+
 #include "event2/util.h"
 #include "defer-internal.h"
 #include "evthread-internal.h"
@@ -41,15 +41,7 @@ extern "C" {
 #include "event2/bufferevent_struct.h"
 
 #include "ipv6-internal.h"
-#ifdef _WIN32
-#include <ws2tcpip.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
 
 /* These flags are reasons that we might be declining to actually enable
    reading or writing on a bufferevent.
@@ -306,19 +298,8 @@ extern const struct bufferevent_ops bufferevent_ops_pair;
 #define BEV_IS_FILTER(bevp) ((bevp)->be_ops == &bufferevent_ops_filter)
 #define BEV_IS_PAIR(bevp) ((bevp)->be_ops == &bufferevent_ops_pair)
 
-#if defined(EVENT__HAVE_OPENSSL)
-extern const struct bufferevent_ops bufferevent_ops_openssl;
-#define BEV_IS_OPENSSL(bevp) ((bevp)->be_ops == &bufferevent_ops_openssl)
-#else
 #define BEV_IS_OPENSSL(bevp) 0
-#endif
-
-#ifdef _WIN32
-extern const struct bufferevent_ops bufferevent_ops_async;
-#define BEV_IS_ASYNC(bevp) ((bevp)->be_ops == &bufferevent_ops_async)
-#else
 #define BEV_IS_ASYNC(bevp) 0
-#endif
 
 /** Initialize the shared parts of a bufferevent. */
 EVENT2_EXPORT_SYMBOL

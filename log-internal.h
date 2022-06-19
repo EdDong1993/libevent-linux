@@ -43,10 +43,6 @@ extern "C" {
 
 #define EVENT_ERR_ABORT_ ((int)0xdeaddead)
 
-#if !defined(EVENT__DISABLE_DEBUG_MODE) || defined(USE_DEBUG)
-#define EVENT_DEBUG_LOGGING_ENABLED
-#endif
-
 #ifdef EVENT_DEBUG_LOGGING_ENABLED
 EVENT2_CORE_EXPORT_SYMBOL extern ev_uint32_t event_debug_logging_mask_;
 #define event_debug_get_logging_mask_() (event_debug_logging_mask_)

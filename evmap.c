@@ -24,24 +24,14 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
-#endif
+
 #include <sys/types.h>
-#if !defined(_WIN32) && defined(EVENT__HAVE_SYS_TIME_H)
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef _WIN32
 #include <unistd.h>
-#endif
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>

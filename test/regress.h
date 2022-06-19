@@ -131,14 +131,6 @@ long timeval_msec_diff(const struct timeval *start, const struct timeval *end);
 pid_t regress_fork(void);
 #endif
 
-#ifdef EVENT__HAVE_OPENSSL
-#include <openssl/ssl.h>
-EVP_PKEY *ssl_getkey(void);
-X509 *ssl_getcert(EVP_PKEY *key);
-SSL_CTX *get_ssl_ctx(void);
-void init_ssl(void);
-#endif
-
 void * basic_test_setup(const struct testcase_t *testcase);
 int    basic_test_cleanup(const struct testcase_t *testcase, void *ptr);
 

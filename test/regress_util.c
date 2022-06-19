@@ -39,18 +39,11 @@
 
 #include <sys/types.h>
 
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
-#ifdef EVENT__HAVE_SYS_WAIT_H
 #include <sys/wait.h>
-#endif
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -311,9 +304,6 @@ regress_sockaddr_port_parse(void *ptr)
 		if (ent->safamily == AF_INET) {
 			struct sockaddr_in sin;
 			memset(&sin, 0, sizeof(sin));
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_IN_SIN_LEN
-			sin.sin_len = sizeof(sin);
-#endif
 			sin.sin_family = AF_INET;
 			sin.sin_port = htons(ent->port);
 			r = evutil_inet_pton(AF_INET, ent->addr, &sin.sin_addr);
@@ -327,9 +317,6 @@ regress_sockaddr_port_parse(void *ptr)
 		} else {
 			struct sockaddr_in6 sin6;
 			memset(&sin6, 0, sizeof(sin6));
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_IN6_SIN6_LEN
-			sin6.sin6_len = sizeof(sin6);
-#endif
 			sin6.sin6_family = AF_INET6;
 			sin6.sin6_port = htons(ent->port);
 			r = evutil_inet_pton(AF_INET6, ent->addr, &sin6.sin6_addr);
@@ -1422,10 +1409,10 @@ test_evutil_monotonic_res(void *data_)
 	delay.tv_sec = 0;
 	delay.tv_usec = wantres;
 
-	tt_int_op(evutil_configure_monotonic_time_(&timer, flags), ==, 0);
+	tt_int_op(evutil_configure_monotonic_time(&timer, flags), ==, 0);
 
 	for (i = 0; i < 10; ++i) {
-		evutil_gettime_monotonic_(&timer, &tv[i]);
+		evutil_gettime_monotonic(&timer, &tv[i]);
 		evutil_usleep_(&delay);
 	}
 
@@ -1459,14 +1446,14 @@ test_evutil_monotonic_prc(void *data_)
 		flags |= EV_MONOT_PRECISE;
 	if (fallback)
 		flags |= EV_MONOT_FALLBACK;
-	tt_int_op(evutil_configure_monotonic_time_(&timer, flags), ==, 0);
+	tt_int_op(evutil_configure_monotonic_time(&timer, flags), ==, 0);
 
 	/* find out what precision we actually see. */
 
-	evutil_gettime_monotonic_(&timer, &tv[0]);
+	evutil_gettime_monotonic(&timer, &tv[0]);
 	for (i = 1; i < 10; ++i) {
 		do {
-			evutil_gettime_monotonic_(&timer, &tv[i]);
+			evutil_gettime_monotonic(&timer, &tv[i]);
 		} while (evutil_timercmp(&tv[i-1], &tv[i], ==));
 	}
 

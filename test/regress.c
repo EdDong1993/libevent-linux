@@ -35,9 +35,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -1353,21 +1351,14 @@ test_signal_restore(void)
 {
 	struct event ev;
 	struct event_base *base = event_init();
-#ifdef EVENT__HAVE_SIGACTION
 	struct sigaction sa;
-#endif
 
 	test_ok = 0;
-#ifdef EVENT__HAVE_SIGACTION
 	sa.sa_handler = signal_cb_sa;
 	sa.sa_flags = 0x0;
 	sigemptyset(&sa.sa_mask);
 	if (sigaction(SIGUSR1, &sa, NULL) == -1)
 		goto out;
-#else
-	if (signal(SIGUSR1, signal_cb_sa) == SIG_ERR)
-		goto out;
-#endif
 	evsignal_set(&ev, SIGUSR1, signal_cb, &ev);
 	evsignal_add(&ev, NULL);
 	evsignal_del(&ev);
@@ -2649,29 +2640,8 @@ end:
 		event_config_free(cfg);
 }
 
-#ifdef EVENT__HAVE_SETENV
 #define SETENV_OK
-#elif !defined(EVENT__HAVE_SETENV) && defined(EVENT__HAVE_PUTENV)
-static void setenv(const char *k, const char *v, int o_)
-{
-	char b[256];
-	evutil_snprintf(b, sizeof(b), "%s=%s",k,v);
-	putenv(b);
-}
-#define SETENV_OK
-#endif
-
-#ifdef EVENT__HAVE_UNSETENV
 #define UNSETENV_OK
-#elif !defined(EVENT__HAVE_UNSETENV) && defined(EVENT__HAVE_PUTENV)
-static void unsetenv(const char *k)
-{
-	char b[256];
-	evutil_snprintf(b, sizeof(b), "%s=",k);
-	putenv(b);
-}
-#define UNSETENV_OK
-#endif
 
 #if defined(SETENV_OK) && defined(UNSETENV_OK)
 static void
@@ -2701,11 +2671,7 @@ test_base_environ(void *arg)
 	setenv("EVENT_NOWAFFLES", "1", 1);
 	unsetenv("EVENT_NOWAFFLES");
 	if (getenv("EVENT_NOWAFFLES") != NULL) {
-#ifndef EVENT__HAVE_UNSETENV
-		TT_DECLARE("NOTE", ("Can't fake unsetenv; skipping test"));
-#else
 		TT_DECLARE("NOTE", ("unsetenv doesn't work; skipping test"));
-#endif
 		tt_skip();
 	}
 

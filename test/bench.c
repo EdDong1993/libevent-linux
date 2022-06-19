@@ -38,9 +38,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -53,9 +51,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <errno.h>
 
 #ifdef _WIN32
@@ -142,9 +138,7 @@ run_once(void)
 int
 main(int argc, char **argv)
 {
-#ifdef EVENT__HAVE_SETRLIMIT
 	struct rlimit rl;
-#endif
 	int i, c;
 	struct timeval *tv;
 	evutil_socket_t *cp;
@@ -152,10 +146,6 @@ main(int argc, char **argv)
 	const char *method = NULL;
 	struct event_config *cfg = NULL;
 
-#ifdef _WIN32
-	WSADATA WSAData;
-	WSAStartup(0x101, &WSAData);
-#endif
 	num_pipes = 100;
 	num_active = 1;
 	num_writes = num_pipes;
@@ -186,13 +176,11 @@ main(int argc, char **argv)
 		}
 	}
 
-#ifdef EVENT__HAVE_SETRLIMIT
 	rl.rlim_cur = rl.rlim_max = num_pipes * 2 + 50;
 	if (setrlimit(RLIMIT_NOFILE, &rl) == -1) {
 		perror("setrlimit");
 		exit(1);
 	}
-#endif
 
 	events = calloc(num_pipes, sizeof(struct event));
 	pipes = calloc(num_pipes * 2, sizeof(evutil_socket_t));

@@ -26,60 +26,22 @@
  */
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#include <io.h>
-#endif
-
-#ifdef EVENT__HAVE_VASPRINTF
-/* If we have vasprintf, we need to define _GNU_SOURCE before we include
- * stdio.h.  This comes from evconfig-private.h.
- */
-#endif
 
 #include <sys/types.h>
-
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_UIO_H
 #include <sys/uio.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_MMAN_H
 #include <sys/mman.h>
-#endif
-
-#ifdef EVENT__HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
-#endif
-#ifdef EVENT__HAVE_SYS_STAT_H
 #include <sys/stat.h>
-#endif
-
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EVENT__HAVE_STDARG_H
 #include <stdarg.h>
-#endif
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <limits.h>
 
 #include "event2/event.h"
@@ -103,19 +65,8 @@
 #endif
 
 /* send file support */
-#if defined(EVENT__HAVE_SYS_SENDFILE_H) && defined(EVENT__HAVE_SENDFILE) && defined(__linux__)
 #define USE_SENDFILE		1
 #define SENDFILE_IS_LINUX	1
-#elif defined(EVENT__HAVE_SENDFILE) && defined(__FreeBSD__)
-#define USE_SENDFILE		1
-#define SENDFILE_IS_FREEBSD	1
-#elif defined(EVENT__HAVE_SENDFILE) && defined(__APPLE__)
-#define USE_SENDFILE		1
-#define SENDFILE_IS_MACOSX	1
-#elif defined(EVENT__HAVE_SENDFILE) && defined(__sun__) && defined(__svr4__)
-#define USE_SENDFILE		1
-#define SENDFILE_IS_SOLARIS	1
-#endif
 
 /* Mask of user-selectable callback flags. */
 #define EVBUFFER_CB_USER_FLAGS	    0xffff
@@ -2172,13 +2123,10 @@ evbuffer_expand(struct evbuffer *buf, size_t datlen)
  * Reads data from a file descriptor into a buffer.
  */
 
-#if defined(EVENT__HAVE_SYS_UIO_H) || defined(_WIN32)
 #define USE_IOVEC_IMPL
-#endif
 
 #ifdef USE_IOVEC_IMPL
 
-#ifdef EVENT__HAVE_SYS_UIO_H
 /* number of iovec we use for writev, fragmentation is going to determine
  * how much we end up writing */
 
@@ -2196,13 +2144,6 @@ evbuffer_expand(struct evbuffer *buf, size_t datlen)
 #define IOV_PTR_FIELD iov_base
 #define IOV_LEN_FIELD iov_len
 #define IOV_LEN_TYPE size_t
-#else
-#define NUM_WRITE_IOVEC 16
-#define IOV_TYPE WSABUF
-#define IOV_PTR_FIELD buf
-#define IOV_LEN_FIELD len
-#define IOV_LEN_TYPE unsigned long
-#endif
 #endif
 #define NUM_READ_IOVEC 4
 
@@ -3020,7 +2961,6 @@ err:
 	return NULL;
 }
 
-#ifdef EVENT__HAVE_MMAP
 static long
 get_page_size(void)
 {
@@ -3032,7 +2972,6 @@ get_page_size(void)
 	return 1;
 #endif
 }
-#endif
 
 /* DOCDOC */
 /* Requires lock */
@@ -3047,7 +2986,6 @@ evbuffer_file_segment_materialize(struct evbuffer_file_segment *seg)
 	if (seg->contents)
 		return 0; /* already materialized */
 
-#if defined(EVENT__HAVE_MMAP)
 	if (!(flags & EVBUF_FS_DISABLE_MMAP)) {
 		off_t offset_rounded = 0, offset_leftover = 0;
 		void *mapped;
@@ -3081,25 +3019,6 @@ evbuffer_file_segment_materialize(struct evbuffer_file_segment *seg)
 			goto done;
 		}
 	}
-#endif
-#ifdef _WIN32
-	if (!(flags & EVBUF_FS_DISABLE_MMAP)) {
-		intptr_t h = _get_osfhandle(fd);
-		HANDLE m;
-		ev_uint64_t total_size = length+offset;
-		if ((HANDLE)h == INVALID_HANDLE_VALUE)
-			goto err;
-		m = CreateFileMapping((HANDLE)h, NULL, PAGE_READONLY,
-		    (total_size >> 32), total_size & 0xfffffffful,
-		    NULL);
-		if (m != INVALID_HANDLE_VALUE) { /* Does h leak? */
-			seg->mapping_handle = m;
-			seg->mmap_offset = offset;
-			seg->is_mapping = 1;
-			goto done;
-		}
-	}
-#endif
 	{
 		ev_off_t start_pos = lseek(fd, 0, SEEK_CUR), pos;
 		ev_off_t read_so_far = 0;
@@ -3163,14 +3082,10 @@ evbuffer_file_segment_free(struct evbuffer_file_segment *seg)
 	EVUTIL_ASSERT(refcnt == 0);
 
 	if (seg->is_mapping) {
-#ifdef _WIN32
-		CloseHandle(seg->mapping_handle);
-#elif defined (EVENT__HAVE_MMAP)
 		off_t offset_leftover;
 		offset_leftover = seg->file_offset % get_page_size();
 		if (munmap(seg->mapping, seg->length + offset_leftover) == -1)
 			event_warn("%s: munmap failed", __func__);
-#endif
 	} else if (seg->contents) {
 		mm_free(seg->contents);
 	}

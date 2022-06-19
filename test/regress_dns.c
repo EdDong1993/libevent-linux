@@ -26,42 +26,25 @@
  */
 #include "../util-internal.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#include <ws2tcpip.h>
-#endif
-
 #include "event2/event-config.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #include <sys/queue.h>
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <signal.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#endif
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
-#ifdef HAVE_NETDB_H
 #include <netdb.h>
-#endif
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
-#ifdef EVENT__HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
-#endif
 
 #include "event2/dns.h"
 #include "event2/dns_compat.h"
@@ -75,6 +58,7 @@
 #include <event2/thread.h>
 #include "log-internal.h"
 #include "evthread-internal.h"
+#include "time-internal.h"
 #include "regress.h"
 #include "regress_testutils.h"
 #include "regress_thread.h"
@@ -107,7 +91,6 @@ dns_gethostbyname_cb(int result, char type, int count, int ttl,
 
 	switch (type) {
 	case DNS_IPv6_AAAA: {
-#if defined(EVENT__HAVE_STRUCT_IN6_ADDR) && defined(EVENT__HAVE_INET_NTOP) && defined(INET6_ADDRSTRLEN)
 		struct in6_addr *in6_addrs = addresses;
 		char buf[INET6_ADDRSTRLEN+1];
 		int i;
@@ -121,7 +104,6 @@ dns_gethostbyname_cb(int result, char type, int count, int ttl,
 			else
 				TT_BLATHER(("%s ", strerror(errno)));
 		}
-#endif
 		break;
 	}
 	case DNS_IPv4_A: {
@@ -328,7 +310,6 @@ dns_server_gethostbyname_cb(int result, char type, int count, int ttl,
 		break;
 	}
 	case DNS_IPv6_AAAA: {
-#if defined (EVENT__HAVE_STRUCT_IN6_ADDR) && defined(EVENT__HAVE_INET_NTOP) && defined(INET6_ADDRSTRLEN)
 		struct in6_addr *in6_addrs = addresses;
 		char buf[INET6_ADDRSTRLEN+1];
 		if (memcmp(&in6_addrs[0].s6_addr, "abcdefghijklmnop", 16)
@@ -338,7 +319,6 @@ dns_server_gethostbyname_cb(int result, char type, int count, int ttl,
 			dns_ok = 0;
 			goto out;
 		}
-#endif
 		break;
 	}
 	case DNS_PTR: {
@@ -1293,7 +1273,6 @@ test_bufferevent_connect_hostname(void *arg)
 	evutil_snprintf(buf, sizeof(buf), "127.0.0.1:%d", (int)dns_port);
 	evdns_base_nameserver_ip_add(dns, buf);
 
-#ifdef EVENT__HAVE_SETRLIMIT
 	if (emfile) {
 		int fd = socket(AF_INET, SOCK_STREAM, 0);
 		struct rlimit file = { fd, fd };
@@ -1303,7 +1282,6 @@ test_bufferevent_connect_hostname(void *arg)
 
 		tt_assert(!setrlimit(RLIMIT_NOFILE, &file));
 	}
-#endif
 
 	/* Now, finally, at long last, launch the bufferevents.	 One should do
 	 * a failing lookup IP, one should do a successful lookup by IP,
@@ -1951,12 +1929,7 @@ testleak_cleanup(const struct testcase_t *testcase, void *env_)
 	int ok = 0;
 	struct testleak_env_t *env = env_;
 	tt_assert(env);
-#ifdef EVENT__DISABLE_DEBUG_MODE
 	tt_int_op(allocated_chunks, ==, 0);
-#else
-	libevent_global_shutdown();
-	tt_int_op(allocated_chunks, ==, 0);
-#endif
 	ok = 1;
 end:
 	if (env) {
@@ -2461,10 +2434,8 @@ struct testcase_t dns_testcases[] = {
 	{ "inflight", dns_inflight_test, TT_FORK|TT_NEED_BASE, &basic_setup, NULL },
 	{ "bufferevent_connect_hostname", test_bufferevent_connect_hostname,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, NULL },
-#ifdef EVENT__HAVE_SETRLIMIT
 	{ "bufferevent_connect_hostname_emfile", test_bufferevent_connect_hostname,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, (char*)"emfile" },
-#endif
 	{ "disable_when_inactive", dns_disable_when_inactive_test,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, NULL },
 	{ "disable_when_inactive_no_ns", dns_disable_when_inactive_no_ns_test,
@@ -2472,10 +2443,8 @@ struct testcase_t dns_testcases[] = {
 
 	{ "initialize_nameservers", dns_initialize_nameservers_test,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, NULL },
-#ifndef _WIN32
 	{ "nameservers_no_default", dns_nameservers_no_default_test,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, NULL },
-#endif
 
 	{ "getaddrinfo_async", test_getaddrinfo_async,
 	  TT_FORK|TT_NEED_BASE, &basic_setup, (char*)"" },

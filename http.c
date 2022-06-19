@@ -26,73 +26,33 @@
  */
 
 #include "event2/event-config.h"
-#include "evconfig-private.h"
 
-#ifdef EVENT__HAVE_SYS_PARAM_H
+
 #include <sys/param.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif
-
-#ifdef HAVE_SYS_IOCCOM_H
-#include <sys/ioccom.h>
-#endif
-#ifdef EVENT__HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
-#endif
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
-#ifdef EVENT__HAVE_SYS_WAIT_H
 #include <sys/wait.h>
-#endif
 
-#ifndef _WIN32
 #include <sys/socket.h>
 #include <sys/stat.h>
-#else /* _WIN32 */
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif /* _WIN32 */
 
-#ifdef EVENT__HAVE_SYS_UN_H
 #include <sys/un.h>
-#endif
-#ifdef EVENT__HAVE_AFUNIX_H
-#include <afunix.h>
-#endif
 
 #include <sys/queue.h>
 
-#ifdef EVENT__HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef EVENT__HAVE_ARPA_INET_H
 #include <arpa/inet.h>
-#endif
-#ifdef EVENT__HAVE_NETDB_H
 #include <netdb.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32
 #include <syslog.h>
-#endif /* !_WIN32 */
 #include <signal.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-#ifdef EVENT__HAVE_FCNTL_H
 #include <fcntl.h>
-#endif
 
 #undef timeout_pending
 #undef timeout_initialized
@@ -111,57 +71,6 @@
 #include "http-internal.h"
 #include "mm-internal.h"
 #include "bufferevent-internal.h"
-
-#ifndef EVENT__HAVE_GETNAMEINFO
-#define NI_MAXSERV 32
-#define NI_MAXHOST 1025
-
-#ifndef NI_NUMERICHOST
-#define NI_NUMERICHOST 1
-#endif
-
-#ifndef NI_NUMERICSERV
-#define NI_NUMERICSERV 2
-#endif
-
-static int
-fake_getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
-	size_t hostlen, char *serv, size_t servlen, int flags)
-{
-	struct sockaddr_in *sin = (struct sockaddr_in *)sa;
-
-	if (serv != NULL) {
-		char tmpserv[16];
-		evutil_snprintf(tmpserv, sizeof(tmpserv),
-		    "%d", ntohs(sin->sin_port));
-		if (strlcpy(serv, tmpserv, servlen) >= servlen)
-			return (-1);
-	}
-
-	if (host != NULL) {
-		if (flags & NI_NUMERICHOST) {
-			if (strlcpy(host, inet_ntoa(sin->sin_addr),
-			    hostlen) >= hostlen)
-				return (-1);
-			else
-				return (0);
-		} else {
-			struct hostent *hp;
-			hp = gethostbyaddr((char *)&sin->sin_addr,
-			    sizeof(struct in_addr), AF_INET);
-			if (hp == NULL)
-				return (-2);
-
-			if (strlcpy(host, hp->h_name, hostlen) >= hostlen)
-				return (-1);
-			else
-				return (0);
-		}
-	}
-	return (0);
-}
-
-#endif
 
 #define REQ_VERSION_BEFORE(req, major_v, minor_v)			\
 	((req)->major < (major_v) ||					\
@@ -206,27 +115,6 @@ static void evhttp_write_cb(struct bufferevent *, void *);
 static void evhttp_error_cb(struct bufferevent *bufev, short what, void *arg);
 static int evhttp_find_vhost(struct evhttp *http, struct evhttp **outhttp,
 		  const char *hostname);
-
-#ifndef EVENT__HAVE_STRSEP
-/* strsep replacement for platforms that lack it.  Only works if
- * del is one character long. */
-static char *
-strsep(char **s, const char *del)
-{
-	char *d, *tok;
-	EVUTIL_ASSERT(strlen(del) == 1);
-	if (!s || !*s)
-		return NULL;
-	tok = *s;
-	d = strstr(tok, del);
-	if (d) {
-		*d = '\0';
-		*s = d + 1;
-	} else
-		*s = NULL;
-	return tok;
-}
-#endif
 
 static size_t
 html_replace(const char ch, const char **escaped)
@@ -4229,12 +4117,10 @@ evhttp_get_request_connection(
 	char *hostname = NULL, *portname = NULL;
 	struct bufferevent* bev = NULL;
 
-#ifdef EVENT__HAVE_STRUCT_SOCKADDR_UN
 	if (sa->sa_family == AF_UNIX) {
 		struct sockaddr_un *sa_un = (struct sockaddr_un *)sa;
 		sa_un->sun_path[0] = '\0';
 	}
-#endif
 
 	name_from_addr(sa, salen, &hostname, &portname);
 	if (hostname == NULL || portname == NULL) {
@@ -4360,7 +4246,6 @@ name_from_addr(struct sockaddr *sa, ev_socklen_t salen,
 	char strport[NI_MAXSERV];
 	int ni_result;
 
-#ifdef EVENT__HAVE_GETNAMEINFO
 	ni_result = getnameinfo(sa, salen,
 		ntop, sizeof(ntop), strport, sizeof(strport),
 		NI_NUMERICHOST|NI_NUMERICSERV);
@@ -4375,13 +4260,7 @@ name_from_addr(struct sockaddr *sa, ev_socklen_t salen,
 			event_errx(1, "getnameinfo failed: %s", gai_strerror(ni_result));
 		return;
 	}
-#else
-	ni_result = fake_getnameinfo(sa, salen,
-		ntop, sizeof(ntop), strport, sizeof(strport),
-		NI_NUMERICHOST|NI_NUMERICSERV);
-	if (ni_result != 0)
-			return;
-#endif
+
 
 	*phost = mm_strdup(ntop);
 	*pport = mm_strdup(strport);

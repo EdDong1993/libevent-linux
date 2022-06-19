@@ -12,28 +12,15 @@
 
 #include <sys/types.h>
 
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <getopt.h>
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
 
 #include <event2/event.h>
 #include <event2/dns.h>
 #include <event2/dns_struct.h>
 #include <event2/util.h>
-
-#ifdef EVENT__HAVE_NETINET_IN6_H
-#include <netinet/in6.h>
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -29,9 +29,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef EVENT__HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -45,9 +43,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#ifdef EVENT__HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #include <errno.h>
 #include <event.h>
 #include <evutil.h>
@@ -139,17 +135,11 @@ run_once(int num_pipes)
 int
 main(int argc, char **argv)
 {
-#ifdef EVENT__HAVE_SETRLIMIT
 	struct rlimit rl;
-#endif
 	int i, c;
 	struct timeval *tv;
 
 	int num_pipes = 100;
-#ifdef _WIN32
-	WSADATA WSAData;
-	WSAStartup(0x101, &WSAData);
-#endif
 
 	while ((c = getopt(argc, argv, "n:")) != -1) {
 		switch (c) {
@@ -162,13 +152,11 @@ main(int argc, char **argv)
 		}
 	}
 
-#ifdef EVENT__HAVE_SETRLIMIT
 	rl.rlim_cur = rl.rlim_max = num_pipes * 2 + 50;
 	if (setrlimit(RLIMIT_NOFILE, &rl) == -1) {
 		perror("setrlimit");
 		exit(1);
 	}
-#endif
 
 	event_init();
 
